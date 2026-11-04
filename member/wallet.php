@@ -1,7 +1,7 @@
 <?php
 /**
  * Member Wallet Management
- * USDT Deposit Request, Withdrawal Requests, and Full Financial Ledger History
+ * USDT Deposit Request (with Company Wallet & QR Code), Withdrawal Requests, and Full Financial Ledger History
  */
 declare(strict_types=1);
 
@@ -10,73 +10,89 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireAuth();
 
-$user = getCurrentUser();
-$userId = (int)$user['id'];
+$currentUser = getCurrentUser();
+$userId = (int)$currentUser['id'];
 $pdo = getDatabaseConnection();
 
+// Fetch fresh user record
+$uStmt = $pdo->prepare("SELECT * FROM users WHERE id = :id LIMIT 1");
+$uStmt->execute([':id' => $userId]);
+$user = $uStmt->fetch();
+
 $error = null;
-$companyDepositWallet = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'; // Platform master USDT TRC20 address
+$companyDepositConfig = getSystemDepositWallet();
 
 // 1. Handle Deposit Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'deposit') {
-    $amount = (float)parseUsdt($_POST['amount'] ?? 0);
-    $txHash = trim($_POST['tx_hash'] ?? '');
-
-    if ($amount < 10) {
-        $error = 'Minimum deposit amount is 10.00 USDT.';
-    } elseif (empty($txHash) || strlen($txHash) < 10) {
-        $error = 'Please provide a valid blockchain transaction hash (TXID).';
+    $token = $_POST['csrf_token'] ?? '';
+    if (!verifyCsrfToken($token)) {
+        $error = 'Invalid security token. Please refresh and try again.';
     } else {
-        // Check if TX hash already used
-        $chkStmt = $pdo->prepare("SELECT id FROM transactions WHERE tx_hash = :hash LIMIT 1");
-        $chkStmt->execute([':hash' => $txHash]);
-        if ($chkStmt->fetch()) {
-            $error = 'This transaction hash has already been submitted.';
-        } else {
-            $stmt = $pdo->prepare("
-                INSERT INTO transactions (user_id, type, amount_usdt, tx_hash, status, details, created_at)
-                VALUES (:uid, 'deposit', :amt, :hash, 'pending', 'Member submitted USDT deposit proof', NOW())
-            ");
-            $stmt->execute([
-                ':uid'  => $userId,
-                ':amt'  => $amount,
-                ':hash' => $txHash,
-            ]);
+        $amount = (float)parseUsdt($_POST['amount'] ?? 0);
+        $txHash = trim($_POST['tx_hash'] ?? '');
 
-            logActivity($userId, "Submitted deposit request of {$amount} USDT (TXID: {$txHash})");
-            setFlash('success', 'Deposit request submitted successfully! Admin will verify and credit your balance.');
-            header('Location: /member/wallet.php');
-            exit;
+        if ($amount < 10) {
+            $error = 'Minimum deposit amount is 10.00 USDT.';
+        } elseif (empty($txHash) || strlen($txHash) < 10) {
+            $error = 'Please provide a valid blockchain transaction hash (TXID).';
+        } else {
+            // Check if TX hash already used
+            $chkStmt = $pdo->prepare("SELECT id FROM transactions WHERE tx_hash = :hash LIMIT 1");
+            $chkStmt->execute([':hash' => $txHash]);
+            if ($chkStmt->fetch()) {
+                $error = 'This transaction hash has already been submitted.';
+            } else {
+                $stmt = $pdo->prepare("
+                    INSERT INTO transactions (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+                    VALUES (:uid, 'deposit', :amt, :hash, 'pending', 'Member submitted USDT deposit proof', NOW())
+                ");
+                $stmt->execute([
+                    ':uid'  => $userId,
+                    ':amt'  => $amount,
+                    ':hash' => $txHash,
+                ]);
+
+                logActivity($userId, "Submitted deposit request of {$amount} USDT (TXID: {$txHash})");
+                setFlash('success', 'Deposit request submitted successfully! Admin will verify and credit your balance.');
+                header('Location: /member/wallet.php');
+                exit;
+            }
         }
     }
 }
 
 // 2. Handle Withdrawal Request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'withdraw') {
-    $amount = (float)parseUsdt($_POST['amount'] ?? 0);
-    $currentBalance = getUserUsdtBalance($userId);
-
-    if (empty($user['usdt_wallet'])) {
-        $error = 'Please set your USDT payout wallet address in your profile before requesting withdrawals.';
-    } elseif ($amount < 10) {
-        $error = 'Minimum withdrawal amount is 10.00 USDT.';
-    } elseif ($amount > $currentBalance) {
-        $error = 'Insufficient funds. Requested: ' . formatUsdt($amount) . ' USDT, Available: ' . formatUsdt($currentBalance) . ' USDT.';
+    $token = $_POST['csrf_token'] ?? '';
+    if (!verifyCsrfToken($token)) {
+        $error = 'Invalid security token. Please refresh and try again.';
     } else {
-        $stmt = $pdo->prepare("
-            INSERT INTO transactions (user_id, type, amount_usdt, tx_hash, status, details, created_at)
-            VALUES (:uid, 'withdrawal', :amt, NULL, 'pending', :details, NOW())
-        ");
-        $stmt->execute([
-            ':uid'     => $userId,
-            ':amt'     => $amount,
-            ':details' => 'Withdrawal to payout wallet: ' . $user['usdt_wallet'],
-        ]);
+        $amount = (float)parseUsdt($_POST['amount'] ?? 0);
+        $currentBalance = getUserUsdtBalance($userId);
 
-        logActivity($userId, "Requested withdrawal of {$amount} USDT to {$user['usdt_wallet']}");
-        setFlash('success', 'Withdrawal request submitted! Funds will be transferred once approved by administrator.');
-        header('Location: /member/wallet.php');
-        exit;
+        if (empty($user['usdt_wallet'])) {
+            $error = 'Please set your USDT payout wallet address in your profile before requesting withdrawals.';
+        } elseif ($amount < 10) {
+            $error = 'Minimum withdrawal amount is 10.00 USDT.';
+        } elseif ($amount > $currentBalance) {
+            $error = 'Insufficient funds. Requested: ' . formatUsdt($amount) . ' USDT, Available: ' . formatUsdt($currentBalance) . ' USDT.';
+        } else {
+            $networkStr = $user['usdt_network'] ?? 'TRC20';
+            $stmt = $pdo->prepare("
+                INSERT INTO transactions (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+                VALUES (:uid, 'withdrawal', :amt, NULL, 'pending', :details, NOW())
+            ");
+            $stmt->execute([
+                ':uid'     => $userId,
+                ':amt'     => $amount,
+                ':details' => "Withdrawal ({$networkStr}) to wallet: " . $user['usdt_wallet'],
+            ]);
+
+            logActivity($userId, "Requested withdrawal of {$amount} USDT to {$user['usdt_wallet']} ({$networkStr})");
+            setFlash('success', 'Withdrawal request submitted! Funds will be transferred once approved by administrator.');
+            header('Location: /member/wallet.php');
+            exit;
+        }
     }
 }
 
@@ -104,7 +120,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <i class="fa-solid fa-wallet text-emerald-400"></i> USDT Tether Wallet
             </h1>
             <p class="text-xs text-slate-400 mt-1">
-                Manage your deposits, fast matrix withdrawals, and complete ledger records.
+                Fund your matrix packages via official deposit address, request payouts, and track transactions.
             </p>
         </div>
         <div class="text-right">
@@ -124,31 +140,59 @@ require_once __DIR__ . '/../includes/header.php';
 
     <!-- Two-Column Actions: Deposit & Withdraw -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <!-- Deposit Box -->
+        <!-- Deposit Box with Official Admin Company QR Code -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
             <div>
                 <div class="flex items-center justify-between pb-4 border-b border-slate-800">
                     <h2 class="text-lg font-bold text-white flex items-center gap-2">
                         <i class="fa-solid fa-circle-down text-emerald-400"></i> Deposit USDT
                     </h2>
-                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">TRC20 / BEP20</span>
+                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold uppercase">
+                        <?= e($companyDepositConfig['network']) ?> Official
+                    </span>
                 </div>
 
-                <div class="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-                    <span class="text-xs text-slate-400 block font-medium">Send USDT to Platform Vault Address:</span>
-                    <div class="flex items-center space-x-2">
-                        <input type="text" id="depositAddr" readonly value="<?= e($companyDepositWallet) ?>"
-                            class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-emerald-300">
-                        <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('depositAddr').value); alert('Vault address copied!');"
-                            class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition">
-                            <i class="fa-regular fa-copy"></i>
-                        </button>
+                <!-- Official Company Deposit Gateway Display -->
+                <div class="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
+                    <div class="flex flex-col sm:flex-row items-center gap-4">
+                        <!-- Official QR Code Image -->
+                        <div class="shrink-0 text-center">
+                            <?php if (!empty($companyDepositConfig['qr_code_path']) && file_exists(__DIR__ . '/../' . $companyDepositConfig['qr_code_path'])): ?>
+                                <img src="/<?= e($companyDepositConfig['qr_code_path']) ?>" alt="Official Company Deposit QR Code"
+                                    class="w-32 h-32 object-contain rounded-xl border border-slate-700 bg-white p-1.5 shadow-md">
+                                <span class="text-[10px] text-slate-400 mt-1 block">Scan Official QR</span>
+                            <?php else: ?>
+                                <div class="w-28 h-28 bg-slate-900 rounded-xl border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500">
+                                    <i class="fa-solid fa-qrcode text-3xl mb-1"></i>
+                                    <span class="text-[9px]">Official QR</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Address copy field -->
+                        <div class="flex-1 w-full space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-400 font-medium">Official Company Deposit Address:</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold"><?= e($companyDepositConfig['network']) ?></span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input type="text" id="depositAddr" readonly value="<?= e($companyDepositConfig['wallet_address']) ?>"
+                                    class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-emerald-300 select-all">
+                                <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('depositAddr').value); alert('Official company deposit address copied!');"
+                                    class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition shrink-0" title="Copy Address">
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                            </div>
+                            <p class="text-[11px] text-slate-400">
+                                Send only <strong>USDT (<?= e($companyDepositConfig['network']) ?>)</strong> to this company address. Minimum deposit: 10 USDT.
+                            </p>
+                        </div>
                     </div>
-                    <p class="text-[11px] text-slate-500">Only send TRC20 or BEP20 Tether tokens. Minimum deposit: 10 USDT.</p>
                 </div>
 
                 <!-- Form to Submit TX Hash -->
                 <form class="mt-6 space-y-4" method="POST" action="/member/wallet.php">
+                    <?= csrfField() ?>
                     <input type="hidden" name="action" value="deposit">
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5" for="deposit_amount">
@@ -175,7 +219,7 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
         </div>
 
-        <!-- Withdraw Box -->
+        <!-- Withdraw Box with Member's Configured Payout Wallet & QR -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col justify-between">
             <div>
                 <div class="flex items-center justify-between pb-4 border-b border-slate-800">
@@ -185,17 +229,32 @@ require_once __DIR__ . '/../includes/header.php';
                     <span class="text-xs text-slate-400">Available: <strong class="text-emerald-400"><?= formatUsdt($balance) ?> USDT</strong></span>
                 </div>
 
-                <div class="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800">
-                    <span class="text-xs text-slate-400 block font-medium">Destination USDT Address:</span>
-                    <div class="mt-1 font-mono text-xs text-slate-200 truncate">
+                <div class="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-400 font-medium">Your Destination USDT Wallet:</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono font-bold">
+                            <?= e($user['usdt_network'] ?? 'TRC20') ?>
+                        </span>
+                    </div>
+
+                    <div class="font-mono text-xs text-slate-200 truncate bg-slate-900 p-2.5 rounded-lg border border-slate-800">
                         <?= e($user['usdt_wallet'] ?: 'No address specified yet. Please configure in Profile.') ?>
                     </div>
+
+                    <?php if (!empty($user['qr_code_path']) && file_exists(__DIR__ . '/../' . $user['qr_code_path'])): ?>
+                        <div class="flex items-center gap-3 pt-1">
+                            <img src="/<?= e($user['qr_code_path']) ?>" alt="Your Payout QR Code" class="w-14 h-14 object-contain rounded-lg border border-slate-700 bg-white p-1">
+                            <span class="text-[11px] text-slate-400">Your payout QR code is attached to your account for fast administrator payouts.</span>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if (empty($user['usdt_wallet'])): ?>
-                        <a href="/member/profile.php" class="text-xs text-emerald-400 underline font-semibold mt-2 inline-block">Set Address Now</a>
+                        <a href="/member/profile.php" class="text-xs text-emerald-400 underline font-semibold inline-block">Set Wallet & Upload QR Now</a>
                     <?php endif; ?>
                 </div>
 
                 <form class="mt-6 space-y-4" method="POST" action="/member/wallet.php">
+                    <?= csrfField() ?>
                     <input type="hidden" name="action" value="withdraw">
                     <div>
                         <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5" for="withdraw_amount">
@@ -206,7 +265,7 @@ require_once __DIR__ . '/../includes/header.php';
                             placeholder="Min 10.00 USDT">
                     </div>
 
-                    <p class="text-[11px] text-slate-400">Withdrawal requests are processed promptly after network verification.</p>
+                    <p class="text-[11px] text-slate-400">Withdrawal requests are processed promptly to your registered wallet address.</p>
 
                     <button type="submit" <?= empty($user['usdt_wallet']) || $balance < 10 ? 'disabled' : '' ?>
                         class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm shadow-md transition">

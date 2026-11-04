@@ -143,3 +143,96 @@ function verifyCsrfToken(?string $token): bool {
     }
     return hash_equals($_SESSION['csrf_token'], $token);
 }
+
+/**
+ * Handle secure QR Code image upload
+ * Supports JPG, PNG, WEBP, GIF up to 5MB
+ * Returns relative path or throws RuntimeException
+ */
+function handleQrCodeUpload(array $file): string {
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException("Upload failed with error code: " . $file['error']);
+    }
+
+    // Limit size to 5MB
+    if ($file['size'] > 5 * 1024 * 1024) {
+        throw new RuntimeException("Uploaded file exceeds 5MB size limit.");
+    }
+
+    // Verify MIME type using finfo
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mimeType = $finfo->file($file['tmp_name']);
+
+    $allowedMimes = [
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+        'image/gif'  => 'gif',
+    ];
+
+    if (!isset($allowedMimes[$mimeType])) {
+        throw new RuntimeException("Invalid file format ({$mimeType}). Only JPG, PNG, WEBP, and GIF images are allowed.");
+    }
+
+    $ext = $allowedMimes[$mimeType];
+    $filename = 'qr_' . bin2hex(random_bytes(16)) . '.' . $ext;
+    $targetDir = __DIR__ . '/../uploads/qr_codes';
+
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0777, true);
+    }
+
+    $targetPath = $targetDir . '/' . $filename;
+    // Handle both HTTP POST uploads and CLI / fallback uploads safely
+    if (is_uploaded_file($file['tmp_name'])) {
+        if (!move_uploaded_file($file['tmp_name'], $targetPath)) {
+            throw new RuntimeException("Could not save the uploaded QR code image to disk.");
+        }
+    } else {
+        if (!copy($file['tmp_name'], $targetPath)) {
+            throw new RuntimeException("Could not save the QR code image to disk.");
+        }
+        @unlink($file['tmp_name']);
+    }
+
+    return 'uploads/qr_codes/' . $filename;
+}
+
+/**
+ * Retrieve system-wide company USDT deposit wallet configuration
+ */
+function getSystemDepositWallet(): array {
+    $pdo = getDatabaseConnection();
+    try {
+        $stmt = $pdo->query("SELECT setting_key, setting_value FROM system_settings");
+        $rows = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        return [
+            'wallet_address' => $rows['company_usdt_wallet'] ?? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+            'network'        => $rows['company_usdt_network'] ?? 'TRC20',
+            'qr_code_path'   => $rows['company_qr_code'] ?? null,
+        ];
+    } catch (Exception $e) {
+        return [
+            'wallet_address' => 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+            'network'        => 'TRC20',
+            'qr_code_path'   => null,
+        ];
+    }
+}
+
+/**
+ * Update system-wide company USDT deposit wallet configuration
+ */
+function updateSystemDepositWallet(string $wallet, string $network, ?string $qrCodePath): void {
+    $pdo = getDatabaseConnection();
+    $stmt = $pdo->prepare("
+        INSERT INTO system_settings (setting_key, setting_value)
+        VALUES (:k, :v)
+        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+    ");
+    $stmt->execute([':k' => 'company_usdt_wallet', ':v' => $wallet]);
+    $stmt->execute([':k' => 'company_usdt_network', ':v' => $network]);
+    if ($qrCodePath !== null) {
+        $stmt->execute([':k' => 'company_qr_code', ':v' => $qrCodePath]);
+    }
+}

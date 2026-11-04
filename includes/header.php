@@ -152,6 +152,11 @@ $currentPath = $_SERVER['SCRIPT_NAME'] ?? '';
                             USDT Transactions
                         </a>
 
+                        <a href="/admin/wallet_settings.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'admin/wallet_settings.php') ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
+                            <i class="fa-solid fa-building-columns w-5 text-center mr-2.5 <?= str_contains($currentPath, 'admin/wallet_settings.php') ? 'text-white' : 'text-emerald-400' ?>"></i>
+                            Company Wallet & QR
+                        </a>
+
                         <a href="/admin/logs.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'admin/logs.php') ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
                             <i class="fa-solid fa-clock-rotate-left w-5 text-center mr-2.5 <?= str_contains($currentPath, 'admin/logs.php') ? 'text-white' : 'text-cyan-400' ?>"></i>
                             System Audit Logs

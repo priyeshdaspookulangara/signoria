@@ -15,8 +15,18 @@ CREATE TABLE `users` (
   `username` VARCHAR(50) NOT NULL UNIQUE,
   `sponsor_id` INT NULL,
   `email` VARCHAR(100) NOT NULL UNIQUE,
+  `phone` VARCHAR(30) NULL,
+  `gender` ENUM('male', 'female', 'other', 'prefer_not_to_say') NULL,
+  `dob` DATE NULL,
+  `address` TEXT NULL,
+  `city` VARCHAR(100) NULL,
+  `district` VARCHAR(100) NULL,
+  `state_province` VARCHAR(100) NULL,
+  `country` VARCHAR(100) NULL,
   `password` VARCHAR(255) NOT NULL,
   `usdt_wallet` VARCHAR(100) NULL,
+  `usdt_network` VARCHAR(30) DEFAULT 'TRC20',
+  `qr_code_path` VARCHAR(255) NULL,
   `role` ENUM('admin', 'member') NOT NULL DEFAULT 'member',
   `status` ENUM('active', 'suspended', 'pending') NOT NULL DEFAULT 'active',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -72,6 +82,13 @@ CREATE TABLE `activity_logs` (
   INDEX `idx_logs_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 5. System Settings Table (Company USDT Deposit Wallet & QR Code)
+CREATE TABLE `system_settings` (
+  `setting_key` VARCHAR(50) PRIMARY KEY,
+  `setting_value` TEXT NULL,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- =======================================================
 -- Default Seed Data
 -- =======================================================
@@ -119,3 +136,9 @@ INSERT INTO `activity_logs` (`user_id`, `action`, `ip_address`, `created_at`) VA
 (3, 'User registered and placed into Package 1 (Node #4) and Package 2 (Node #8)', '127.0.0.1', NOW()),
 (4, 'User registered and placed into Package 1 (Node #5)', '127.0.0.1', NOW()),
 (5, 'User registered and placed into Package 1 (Node #6)', '127.0.0.1', NOW());
+
+-- Seed default company deposit settings
+INSERT INTO `system_settings` (`setting_key`, `setting_value`) VALUES
+('company_usdt_wallet', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'),
+('company_usdt_network', 'TRC20'),
+('company_qr_code', NULL);

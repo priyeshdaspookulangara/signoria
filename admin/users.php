@@ -69,7 +69,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $targetUserId = (int)($_POST['target_user_id'] ?? 0);
     $username = trim($_POST['username'] ?? '');
     $email = trim($_POST['email'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $gender = trim($_POST['gender'] ?? '');
+    $dob = trim($_POST['dob'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+    $city = trim($_POST['city'] ?? '');
+    $district = trim($_POST['district'] ?? '');
+    $stateProvince = trim($_POST['state_province'] ?? '');
+    $country = trim($_POST['country'] ?? '');
     $usdtWallet = trim($_POST['usdt_wallet'] ?? '');
+    $usdtNetwork = trim($_POST['usdt_network'] ?? 'TRC20');
     $status = trim($_POST['status'] ?? 'active');
     $role = trim($_POST['role'] ?? 'member');
     $newPassword = $_POST['new_password'] ?? '';
@@ -90,35 +99,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             setFlash('danger', 'Username or email is already taken by another account.');
         } else {
             try {
+                $validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
+                $genderVal = in_array($gender, $validGenders, true) ? $gender : null;
+                $dobVal = !empty($dob) ? $dob : null;
+
                 if (!empty($newPassword) && strlen($newPassword) >= 6) {
                     $hash = password_hash($newPassword, PASSWORD_BCRYPT);
                     $upStmt = $pdo->prepare("
                         UPDATE users
-                        SET username = :u, email = :e, usdt_wallet = :w, status = :s, role = :r, password = :p
+                        SET username = :u, email = :e, phone = :phone, gender = :gender, dob = :dob,
+                            address = :address, city = :city, district = :district, state_province = :state, country = :country,
+                            usdt_wallet = :w, usdt_network = :net, status = :s, role = :r, password = :p
                         WHERE id = :id
                     ");
                     $upStmt->execute([
-                        ':u'  => $username,
-                        ':e'  => $email,
-                        ':w'  => $usdtWallet,
-                        ':s'  => $status,
-                        ':r'  => $role,
-                        ':p'  => $hash,
-                        ':id' => $targetUserId,
+                        ':u'       => $username,
+                        ':e'       => $email,
+                        ':phone'   => !empty($phone) ? $phone : null,
+                        ':gender'  => $genderVal,
+                        ':dob'     => $dobVal,
+                        ':address' => !empty($address) ? $address : null,
+                        ':city'    => !empty($city) ? $city : null,
+                        ':district'=> !empty($district) ? $district : null,
+                        ':state'   => !empty($stateProvince) ? $stateProvince : null,
+                        ':country' => !empty($country) ? $country : null,
+                        ':w'       => !empty($usdtWallet) ? $usdtWallet : null,
+                        ':net'     => !empty($usdtNetwork) ? $usdtNetwork : 'TRC20',
+                        ':s'       => $status,
+                        ':r'       => $role,
+                        ':p'       => $hash,
+                        ':id'      => $targetUserId,
                     ]);
                 } else {
                     $upStmt = $pdo->prepare("
                         UPDATE users
-                        SET username = :u, email = :e, usdt_wallet = :w, status = :s, role = :r
+                        SET username = :u, email = :e, phone = :phone, gender = :gender, dob = :dob,
+                            address = :address, city = :city, district = :district, state_province = :state, country = :country,
+                            usdt_wallet = :w, usdt_network = :net, status = :s, role = :r
                         WHERE id = :id
                     ");
                     $upStmt->execute([
-                        ':u'  => $username,
-                        ':e'  => $email,
-                        ':w'  => $usdtWallet,
-                        ':s'  => $status,
-                        ':r'  => $role,
-                        ':id' => $targetUserId,
+                        ':u'       => $username,
+                        ':e'       => $email,
+                        ':phone'   => !empty($phone) ? $phone : null,
+                        ':gender'  => $genderVal,
+                        ':dob'     => $dobVal,
+                        ':address' => !empty($address) ? $address : null,
+                        ':city'    => !empty($city) ? $city : null,
+                        ':district'=> !empty($district) ? $district : null,
+                        ':state'   => !empty($stateProvince) ? $stateProvince : null,
+                        ':country' => !empty($country) ? $country : null,
+                        ':w'       => !empty($usdtWallet) ? $usdtWallet : null,
+                        ':net'     => !empty($usdtNetwork) ? $usdtNetwork : 'TRC20',
+                        ':s'       => $status,
+                        ':r'       => $role,
+                        ':id'      => $targetUserId,
                     ]);
                 }
 
@@ -300,8 +335,8 @@ require_once __DIR__ . '/../includes/header.php';
 
 <!-- Edit Member Modal -->
 <div id="editModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
-        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scroll">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
             <h3 class="text-base font-bold text-white flex items-center gap-2">
                 <i class="fa-solid fa-user-pen text-blue-400"></i> Edit Member Details
             </h3>
@@ -311,6 +346,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
         <form method="POST" action="/admin/users.php" class="mt-5 space-y-4">
+            <?= csrfField() ?>
             <input type="hidden" name="action" value="edit_user">
             <input type="hidden" name="target_user_id" id="editUserId">
 
@@ -326,16 +362,88 @@ require_once __DIR__ . '/../includes/header.php';
                     <input type="email" id="editEmail" name="email" required
                         class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editPhone">Phone Number</label>
+                    <input type="text" id="editPhone" name="phone"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="+123456789">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editGender">Gender</label>
+                    <select id="editGender" name="gender" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Unspecified --</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                        <option value="prefer_not_to_say">Prefer not to say</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editDob">Date of Birth</label>
+                    <input type="date" id="editDob" name="dob"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editCountry">Country</label>
+                    <input type="text" id="editCountry" name="country"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
             </div>
 
-            <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editUsdtWallet">USDT Payout Wallet</label>
-                <input type="text" id="editUsdtWallet" name="usdt_wallet"
-                    class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t">
+            <!-- Address Fields -->
+            <div class="border-t border-slate-800 pt-3">
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editAddress">Street Address</label>
+                <input type="text" id="editAddress" name="address"
+                    class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editCity">City / Place</label>
+                    <input type="text" id="editCity" name="city"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editDistrict">District</label>
+                    <input type="text" id="editDistrict" name="district"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editState">State / Province</label>
+                    <input type="text" id="editState" name="state_province"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <!-- Wallet Details -->
+            <div class="border-t border-slate-800 pt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editUsdtNetwork">USDT Network</label>
+                    <select id="editUsdtNetwork" name="usdt_network" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="TRC20">TRC20</option>
+                        <option value="BEP20">BEP20</option>
+                        <option value="ERC20">ERC20</option>
+                        <option value="POLYGON">POLYGON</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editUsdtWallet">USDT Payout Wallet</label>
+                    <input type="text" id="editUsdtWallet" name="usdt_wallet"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t">
+                </div>
+            </div>
+
+            <!-- QR Code preview if exists -->
+            <div id="qrCodePreviewArea" class="hidden p-3 bg-slate-950 rounded-xl border border-slate-800 text-center">
+                <span class="text-[10px] text-slate-400 block uppercase font-bold mb-1">Member Uploaded QR Code</span>
+                <img id="qrCodePreviewImg" src="" alt="Member QR Code" class="w-28 h-28 mx-auto object-contain rounded-lg border border-slate-700 bg-white p-1">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-800 pt-3">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editStatus">Status</label>
                     <select id="editStatus" name="status" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -379,10 +487,29 @@ require_once __DIR__ . '/../includes/header.php';
         document.getElementById('editUserId').value = user.id;
         document.getElementById('editUsername').value = user.username;
         document.getElementById('editEmail').value = user.email;
+        document.getElementById('editPhone').value = user.phone || '';
+        document.getElementById('editGender').value = user.gender || '';
+        document.getElementById('editDob').value = user.dob || '';
+        document.getElementById('editCountry').value = user.country || '';
+        document.getElementById('editAddress').value = user.address || '';
+        document.getElementById('editCity').value = user.city || '';
+        document.getElementById('editDistrict').value = user.district || '';
+        document.getElementById('editState').value = user.state_province || '';
         document.getElementById('editUsdtWallet').value = user.usdt_wallet || '';
+        document.getElementById('editUsdtNetwork').value = user.usdt_network || 'TRC20';
         document.getElementById('editStatus').value = user.status;
         document.getElementById('editRole').value = user.role;
         document.getElementById('editNewPassword').value = '';
+
+        const qrArea = document.getElementById('qrCodePreviewArea');
+        const qrImg = document.getElementById('qrCodePreviewImg');
+        if (user.qr_code_path) {
+            qrImg.src = '/' + user.qr_code_path;
+            qrArea.classList.remove('hidden');
+        } else {
+            qrArea.classList.add('hidden');
+        }
+
         document.getElementById('editModal').classList.remove('hidden');
     }
 
