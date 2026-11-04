@@ -115,3 +115,31 @@ function getBaseUrl(): string {
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     return $protocol . $host;
 }
+
+/**
+ * CSRF Protection Helpers
+ */
+function csrfToken(): string {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function csrfField(): string {
+    $token = csrfToken();
+    return '<input type="hidden" name="csrf_token" value="' . e($token) . '">';
+}
+
+function verifyCsrfToken(?string $token): bool {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (empty($token) || empty($_SESSION['csrf_token'])) {
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], $token);
+}

@@ -253,11 +253,16 @@ class BfsMatrixEngine {
      * a rebirth fee is deducted and a new booster slot is queued into BFS.
      */
     public static function checkAndTriggerRebirths(PDO $pdo, array $node): void {
+        // Booster / rebirth slots should not trigger secondary rebirth cascades
+        if (!empty($node['is_rebirth'])) {
+            return;
+        }
+
         $config = self::getConfig($node['package_type']);
         $rebirthLevels = $config['rebirth_levels'];
 
-        // If newly inserted node is placed at or above a rebirth trigger level
-        // and hasn't yet triggered a rebirth for its user in this package:
+        // Check if newly placed primary node reached a designated rebirth trigger level
+        // and hasn't already spawned a rebirth booster slot
         if (in_array($node['level'], $rebirthLevels, true)) {
             // Check if user has sufficient funds or if rebirth is auto-debited
             $userId = (int)$node['user_id'];

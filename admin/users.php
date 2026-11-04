@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin User Management (CRUD & Status Toggle & BFS Tree Position Check)
+ * Admin User Management (CRUD: Edit, Delete with Full Cascade, Status Toggle, & BFS Check)
  */
 declare(strict_types=1);
 
@@ -13,7 +13,128 @@ requireAdmin();
 $pdo = getDatabaseConnection();
 $adminUser = getCurrentUser();
 
-// Handle Status Toggle (active, suspended)
+// 1. Handle Delete Member Action
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete_user') {
+    $targetUserId = (int)($_POST['target_user_id'] ?? 0);
+
+    if ($targetUserId === (int)$adminUser['id']) {
+        setFlash('danger', 'You cannot delete your own administrator account.');
+    } else {
+        $chkStmt = $pdo->prepare("SELECT username FROM users WHERE id = :id LIMIT 1");
+        $chkStmt->execute([':id' => $targetUserId]);
+        $targetUsername = $chkStmt->fetchColumn();
+
+        if (!$targetUsername) {
+            setFlash('danger', 'User not found.');
+        } else {
+            $pdo->beginTransaction();
+            try {
+                // Delete user's transactions
+                $delTx = $pdo->prepare("DELETE FROM transactions WHERE user_id = :uid");
+                $delTx->execute([':uid' => $targetUserId]);
+
+                // Delete user's matrix nodes
+                $delNodes = $pdo->prepare("DELETE FROM matrix_nodes WHERE user_id = :uid");
+                $delNodes->execute([':uid' => $targetUserId]);
+
+                // Delete user's activity logs
+                $delLogs = $pdo->prepare("DELETE FROM activity_logs WHERE user_id = :uid");
+                $delLogs->execute([':uid' => $targetUserId]);
+
+                // Clear sponsor_id references in other users who had this user as sponsor (set to null)
+                $upSponsors = $pdo->prepare("UPDATE users SET sponsor_id = NULL WHERE sponsor_id = :uid");
+                $upSponsors->execute([':uid' => $targetUserId]);
+
+                // Delete the user record
+                $delUser = $pdo->prepare("DELETE FROM users WHERE id = :uid");
+                $delUser->execute([':uid' => $targetUserId]);
+
+                $pdo->commit();
+
+                logActivity((int)$adminUser['id'], "Admin completely deleted user '{$targetUsername}' (#{$targetUserId}) and purged all their transactions, matrix nodes, and logs.");
+                setFlash('success', "User '{$targetUsername}' and all associated transactions, matrix nodes, and logs have been deleted successfully.");
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                error_log("Failed to delete user: " . $e->getMessage());
+                setFlash('danger', "Failed to delete user: " . $e->getMessage());
+            }
+        }
+    }
+    header('Location: /admin/users.php');
+    exit;
+}
+
+// 2. Handle Edit Member Action
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_user') {
+    $targetUserId = (int)($_POST['target_user_id'] ?? 0);
+    $username = trim($_POST['username'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $usdtWallet = trim($_POST['usdt_wallet'] ?? '');
+    $status = trim($_POST['status'] ?? 'active');
+    $role = trim($_POST['role'] ?? 'member');
+    $newPassword = $_POST['new_password'] ?? '';
+
+    if (empty($username) || empty($email)) {
+        setFlash('danger', 'Username and email cannot be empty.');
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        setFlash('danger', 'Please enter a valid email address.');
+    } elseif (!in_array($status, ['active', 'suspended', 'pending'], true)) {
+        setFlash('danger', 'Invalid status selected.');
+    } elseif (!in_array($role, ['admin', 'member'], true)) {
+        setFlash('danger', 'Invalid role selected.');
+    } else {
+        // Check uniqueness of username or email among other accounts
+        $uStmt = $pdo->prepare("SELECT id FROM users WHERE (username = :u OR email = :e) AND id != :id LIMIT 1");
+        $uStmt->execute([':u' => $username, ':e' => $email, ':id' => $targetUserId]);
+        if ($uStmt->fetch()) {
+            setFlash('danger', 'Username or email is already taken by another account.');
+        } else {
+            try {
+                if (!empty($newPassword) && strlen($newPassword) >= 6) {
+                    $hash = password_hash($newPassword, PASSWORD_BCRYPT);
+                    $upStmt = $pdo->prepare("
+                        UPDATE users
+                        SET username = :u, email = :e, usdt_wallet = :w, status = :s, role = :r, password = :p
+                        WHERE id = :id
+                    ");
+                    $upStmt->execute([
+                        ':u'  => $username,
+                        ':e'  => $email,
+                        ':w'  => $usdtWallet,
+                        ':s'  => $status,
+                        ':r'  => $role,
+                        ':p'  => $hash,
+                        ':id' => $targetUserId,
+                    ]);
+                } else {
+                    $upStmt = $pdo->prepare("
+                        UPDATE users
+                        SET username = :u, email = :e, usdt_wallet = :w, status = :s, role = :r
+                        WHERE id = :id
+                    ");
+                    $upStmt->execute([
+                        ':u'  => $username,
+                        ':e'  => $email,
+                        ':w'  => $usdtWallet,
+                        ':s'  => $status,
+                        ':r'  => $role,
+                        ':id' => $targetUserId,
+                    ]);
+                }
+
+                logActivity((int)$adminUser['id'], "Admin updated details for user '{$username}' (#{$targetUserId}).");
+                setFlash('success', "User #{$targetUserId} ('{$username}') updated successfully.");
+            } catch (Exception $e) {
+                error_log("Failed to edit user: " . $e->getMessage());
+                setFlash('danger', "Failed to update user: " . $e->getMessage());
+            }
+        }
+    }
+    header('Location: /admin/users.php');
+    exit;
+}
+
+// 3. Handle Status Quick-Toggle Action
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_status') {
     $targetUserId = (int)($_POST['target_user_id'] ?? 0);
     $newStatus = trim($_POST['new_status'] ?? '');
@@ -31,7 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// Fetch users with sponsor details and matrix node count
+// Fetch users with sponsor details and matrix node counts
 $search = trim($_GET['q'] ?? '');
 $sql = "
     SELECT u.*, sp.username AS sponsor_name,
@@ -58,13 +179,13 @@ $pageTitle = 'Member Management';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+<div class="space-y-8">
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 border-b border-slate-800 gap-4">
         <div>
             <h1 class="text-2xl font-black text-white flex items-center gap-2">
                 <i class="fa-solid fa-users text-blue-400"></i> Member Management
             </h1>
-            <p class="text-xs text-slate-400 mt-1">Review user accounts, inspect matrix tree placements, and update account permissions.</p>
+            <p class="text-xs text-slate-400 mt-1">Review, edit, or purge member records, inspect matrix trees, and manage account statuses.</p>
         </div>
 
         <form method="GET" action="/admin/users.php" class="flex items-center gap-2 w-full sm:w-auto">
@@ -147,27 +268,26 @@ require_once __DIR__ . '/../includes/header.php';
                                     </span>
                                 </td>
                                 <td class="py-3 px-3 text-right">
-                                    <?php if ($u['id'] !== $adminUser['id']): ?>
-                                        <form method="POST" action="/admin/users.php" class="inline-block">
-                                            <input type="hidden" name="action" value="toggle_status">
-                                            <input type="hidden" name="target_user_id" value="<?= (int)$u['id'] ?>">
-                                            <?php if ($u['status'] === 'active'): ?>
-                                                <input type="hidden" name="new_status" value="suspended">
-                                                <button type="submit" onclick="return confirm('Suspend user <?= e($u['username']) ?>?');"
-                                                    class="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-lg text-[11px] font-semibold transition">
-                                                    Suspend
-                                                </button>
-                                            <?php else: ?>
-                                                <input type="hidden" name="new_status" value="active">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <!-- Edit Button (Opens Modal) -->
+                                        <button type="button"
+                                            onclick='openEditModal(<?= json_encode($u, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)'
+                                            class="px-2.5 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 rounded-lg text-[11px] font-semibold transition flex items-center gap-1">
+                                            <i class="fa-solid fa-pen-to-square"></i> Edit
+                                        </button>
+
+                                        <?php if ((int)$u['id'] !== (int)$adminUser['id']): ?>
+                                            <!-- Delete Button -->
+                                            <form method="POST" action="/admin/users.php" class="inline" onsubmit="return confirm('⚠️ WARNING: Deleting user \'<?= e($u['username']) ?>\' will PERMANENTLY REMOVE all their transactions, matrix tree nodes, and activity logs.\n\nAre you sure you want to proceed?');">
+                                                <input type="hidden" name="action" value="delete_user">
+                                                <input type="hidden" name="target_user_id" value="<?= (int)$u['id'] ?>">
                                                 <button type="submit"
-                                                    class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] font-semibold transition">
-                                                    Activate
+                                                    class="px-2.5 py-1 bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 border border-rose-500/30 rounded-lg text-[11px] font-semibold transition flex items-center gap-1">
+                                                    <i class="fa-solid fa-trash-can"></i> Delete
                                                 </button>
-                                            <?php endif; ?>
-                                        </form>
-                                    <?php else: ?>
-                                        <span class="text-[11px] text-slate-500">Current Admin</span>
-                                    <?php endif; ?>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -177,5 +297,98 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- Edit Member Modal -->
+<div id="editModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-user-pen text-blue-400"></i> Edit Member Details
+            </h3>
+            <button type="button" onclick="closeEditModal()" class="text-slate-400 hover:text-white p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="/admin/users.php" class="mt-5 space-y-4">
+            <input type="hidden" name="action" value="edit_user">
+            <input type="hidden" name="target_user_id" id="editUserId">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editUsername">Username</label>
+                    <input type="text" id="editUsername" name="username" required
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editEmail">Email Address</label>
+                    <input type="email" id="editEmail" name="email" required
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editUsdtWallet">USDT Payout Wallet</label>
+                <input type="text" id="editUsdtWallet" name="usdt_wallet"
+                    class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editStatus">Status</label>
+                    <select id="editStatus" name="status" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editRole">Role</label>
+                    <select id="editRole" name="role" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="member">Member</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editNewPassword">
+                    Reset Password <span class="text-slate-500 font-normal lowercase">(leave blank to keep current)</span>
+                </label>
+                <input type="password" id="editNewPassword" name="new_password" placeholder="New password"
+                    class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div class="pt-3 flex items-center justify-end gap-3 border-t border-slate-800">
+                <button type="button" onclick="closeEditModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-md transition">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openEditModal(user) {
+        document.getElementById('editUserId').value = user.id;
+        document.getElementById('editUsername').value = user.username;
+        document.getElementById('editEmail').value = user.email;
+        document.getElementById('editUsdtWallet').value = user.usdt_wallet || '';
+        document.getElementById('editStatus').value = user.status;
+        document.getElementById('editRole').value = user.role;
+        document.getElementById('editNewPassword').value = '';
+        document.getElementById('editModal').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').classList.add('hidden');
+    }
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
