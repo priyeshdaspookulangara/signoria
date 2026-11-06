@@ -37,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $passwordConfirm = $_POST['password_confirm'] ?? '';
-    $usdtWallet = trim($_POST['usdt_wallet'] ?? '');
     $sponsorInput = trim($_POST['sponsor'] ?? '');
     $packageType = trim($_POST['package_type'] ?? 'package_1');
 
@@ -52,8 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Password must be at least 6 characters long.';
     } elseif ($password !== $passwordConfirm) {
         $error = 'Password confirmation does not match.';
-    } elseif (empty($usdtWallet) || strlen($usdtWallet) < 10) {
-        $error = 'Please provide a valid TRC20 or BEP20 USDT payout address.';
     } else {
         // Resolve Sponsor ID
         $matchedSponsorId = null;
@@ -87,14 +84,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
                     $insStmt = $pdo->prepare("
                         INSERT INTO users (username, sponsor_id, email, password, usdt_wallet, role, status, created_at)
-                        VALUES (:u, :sp, :e, :p, :w, 'member', 'active', NOW())
+                        VALUES (:u, :sp, :e, :p, NULL, 'member', 'active', NOW())
                     ");
                     $insStmt->execute([
                         ':u'  => $username,
                         ':sp' => $matchedSponsorId,
                         ':e'  => $email,
                         ':p'  => $hashedPassword,
-                        ':w'  => $usdtWallet,
                     ]);
 
                     $newUserId = (int)$pdo->lastInsertId();
@@ -206,20 +202,11 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
             </div>
 
-            <div>
-                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5" for="usdt_wallet">
-                    Your USDT Wallet Address (TRC20 / BEP20)
-                </label>
-                <div class="relative">
-                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-emerald-500">
-                        <i class="fa-solid fa-wallet"></i>
-                    </div>
-                    <input id="usdt_wallet" name="usdt_wallet" type="text" required
-                        value="<?= e($_POST['usdt_wallet'] ?? '') ?>"
-                        class="block w-full pl-10 pr-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-mono"
-                        placeholder="TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t or 0x...">
+            <div class="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/80 flex items-start gap-3">
+                <i class="fa-solid fa-wallet text-emerald-400 mt-0.5"></i>
+                <div class="text-xs text-slate-300 leading-relaxed">
+                    <span class="font-bold text-white">USDT Payout Wallet Setup:</span> You can configure your payout wallet address (TRC20, BEP20, ERC20, Polygon) and upload your wallet QR code anytime inside the <span class="text-emerald-400 font-semibold">Member Profile & Settings</span> area.
                 </div>
-                <p class="text-[11px] text-slate-400 mt-1">Matrix payout rewards will be wired to this address.</p>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
