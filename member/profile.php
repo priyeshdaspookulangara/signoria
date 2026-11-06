@@ -48,16 +48,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $error = 'Please enter a valid email address.';
             } else {
-                // Check email uniqueness if changed
-                $chkStmt = $pdo->prepare("SELECT id FROM users WHERE email = :e AND id != :id LIMIT 1");
-                $chkStmt->execute([':e' => $email, ':id' => $userId]);
-                if ($chkStmt->fetch()) {
-                    $error = 'Email address is already in use by another account.';
-                } else {
-                    // Validate optional gender
-                    $validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
-                    $genderVal = in_array($gender, $validGenders, true) ? $gender : null;
-                    $dobVal = !empty($dob) ? $dob : null;
+                // Validate optional gender (email uniqueness is not required)
+                $validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
+                $genderVal = in_array($gender, $validGenders, true) ? $gender : null;
+                $dobVal = !empty($dob) ? $dob : null;
 
                     // Handle QR Code image upload if provided
                     $qrCodePath = $user['qr_code_path'];
@@ -107,7 +101,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         header('Location: /member/profile.php');
                         exit;
                     }
-                }
             }
         } elseif ($action === 'change_password') {
             $currentPass = $_POST['current_password'] ?? '';

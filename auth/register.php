@@ -72,11 +72,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!$error) {
-            // Check username or email uniqueness
-            $uStmt = $pdo->prepare("SELECT id FROM users WHERE username = :u OR email = :e LIMIT 1");
-            $uStmt->execute([':u' => $username, ':e' => $email]);
+            // Check username uniqueness (email does not need to be unique)
+            $uStmt = $pdo->prepare("SELECT id FROM users WHERE username = :u LIMIT 1");
+            $uStmt->execute([':u' => $username]);
             if ($uStmt->fetch()) {
-                $error = 'Username or email already exists. Please choose another.';
+                $error = 'Username already exists. Please choose another username.';
             } else {
                 // Begin Transaction for atomic registration and matrix entry
                 $pdo->beginTransaction();

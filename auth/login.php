@@ -19,14 +19,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please enter both username/email and password.';
     } else {
         $pdo = getDatabaseConnection();
+        // Query users matching username or email; order by exact username match first
         $stmt = $pdo->prepare("
             SELECT id, username, email, password, role, status
             FROM users
             WHERE username = :u OR email = :e
-            LIMIT 1
+            ORDER BY (username = :exact) DESC, id ASC
         ");
-        $stmt->execute([':u' => $usernameOrEmail, ':e' => $usernameOrEmail]);
-        $user = $stmt->fetch();
+        $stmt->execute([':u' => $usernameOrEmail, ':e' => $usernameOrEmail, ':exact' => $usernameOrEmail]);
+        $users = $stmt->fetchAll();
+
+        // Check if password matches any matched account (handles non-unique emails across accounts)
+        $user = null;
+        foreach ($users as $candidate) {
+            if (password_verify($password, $candidate['password'])) {
+                $user = $candidate;
+                break;
+            }
+        }
 
         if ($user && password_verify($password, $user['password'])) {
             if ($user['status'] === 'suspended') {

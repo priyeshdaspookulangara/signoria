@@ -92,11 +92,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     } elseif (!in_array($role, ['admin', 'member'], true)) {
         setFlash('danger', 'Invalid role selected.');
     } else {
-        // Check uniqueness of username or email among other accounts
-        $uStmt = $pdo->prepare("SELECT id FROM users WHERE (username = :u OR email = :e) AND id != :id LIMIT 1");
-        $uStmt->execute([':u' => $username, ':e' => $email, ':id' => $targetUserId]);
+        // Check uniqueness of username among other accounts (email does not need to be unique)
+        $uStmt = $pdo->prepare("SELECT id FROM users WHERE username = :u AND id != :id LIMIT 1");
+        $uStmt->execute([':u' => $username, ':id' => $targetUserId]);
         if ($uStmt->fetch()) {
-            setFlash('danger', 'Username or email is already taken by another account.');
+            setFlash('danger', 'Username is already taken by another account.');
         } else {
             try {
                 $validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];

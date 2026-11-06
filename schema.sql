@@ -14,7 +14,7 @@ CREATE TABLE `users` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `username` VARCHAR(50) NOT NULL UNIQUE,
   `sponsor_id` INT NULL,
-  `email` VARCHAR(100) NOT NULL UNIQUE,
+  `email` VARCHAR(100) NOT NULL,
   `phone` VARCHAR(30) NULL,
   `gender` ENUM('male', 'female', 'other', 'prefer_not_to_say') NULL,
   `dob` DATE NULL,
@@ -31,6 +31,7 @@ CREATE TABLE `users` (
   `status` ENUM('active', 'suspended', 'pending') NOT NULL DEFAULT 'active',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_users_sponsor` (`sponsor_id`),
+  INDEX `idx_users_email` (`email`),
   INDEX `idx_users_role` (`role`),
   INDEX `idx_users_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
