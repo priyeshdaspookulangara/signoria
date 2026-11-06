@@ -121,11 +121,11 @@ INSERT INTO `matrix_nodes` (`id`, `user_id`, `package_type`, `level`, `position_
 
 -- Seed sample completed transactions
 INSERT INTO `transactions` (`user_id`, `type`, `amount_usdt`, `tx_hash`, `status`, `details`, `created_at`) VALUES
-(2, 'deposit', 100.00, '0x8f23ba56c321a9e8754bde29871029cba82716354dfa9807123456789abcdef1', 'completed', 'Approved deposit for Package 1 entry', NOW()),
-(2, 'matrix_payout', 60.00, NULL, 'completed', 'Level 1 matrix payout bonus from child node #6', NOW()),
+(2, 'deposit', 50.00, '0x8f23ba56c321a9e8754bde29871029cba82716354dfa9807123456789abcdef1', 'completed', 'Approved deposit for Package 1 entry', NOW()),
+(2, 'matrix_payout', 30.00, NULL, 'completed', 'Level 1 matrix payout bonus from child node #6', NOW()),
 (3, 'deposit', 300.00, '0x1234ba56c321a9e8754bde29871029cba82716354dfa9807123456789abcde02', 'completed', 'Approved deposit for Package 2 entry', NOW()),
-(4, 'deposit', 100.00, '0x4567ba56c321a9e8754bde29871029cba82716354dfa9807123456789abcde03', 'completed', 'Package 1 entry', NOW()),
-(5, 'deposit', 100.00, '0x9999ba56c321a9e8754bde29871029cba82716354dfa9807123456789abcde04', 'completed', 'Package 1 entry', NOW()),
+(4, 'deposit', 50.00, '0x4567ba56c321a9e8754bde29871029cba82716354dfa9807123456789abcde03', 'completed', 'Package 1 entry', NOW()),
+(5, 'deposit', 50.00, '0x9999ba56c321a9e8754bde29871029cba82716354dfa9807123456789abcde04', 'completed', 'Package 1 entry', NOW()),
 (2, 'withdrawal', 30.00, '0x3333ba56c321a9e8754bde29871029cba82716354dfa9807123456789abcde05', 'completed', 'Payout to wallet TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE', NOW()),
 (3, 'withdrawal', 50.00, NULL, 'pending', 'Pending member withdrawal request', NOW());
 

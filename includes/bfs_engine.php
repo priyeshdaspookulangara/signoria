@@ -21,8 +21,8 @@ class BfsMatrixEngine {
         'package_1' => [
             'name'           => 'Package I (Standard 6-Depth Pool)',
             'max_levels'     => 6,
-            'entry_amount'   => 100.00,
-            'rebirth_fee'    => 20.00,
+            'entry_amount'   => 50.00,
+            'rebirth_fee'    => 10.00,
             'rebirth_levels' => [4, 5, 6],
             'distribution_pct' => 0.60, // 60% of entry amount distributed to active uplines
         ],

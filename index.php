@@ -154,7 +154,7 @@ tailwind.config = { theme: { extend: {
       <article class="rv rounded-[2rem] p-10 bg-night border border-cream/10 relative overflow-hidden">
         <i class="fa-solid fa-person-hiking absolute -right-3 -top-3 text-[8rem] text-cream/5"></i>
         <p class="font-display italic text-2xl text-teal">The Starter Trail</p>
-        <p class="mt-3 font-display text-7xl text-cream">100 <span class="text-2xl text-cream/60">USDT</span></p>
+        <p class="mt-3 font-display text-7xl text-cream">50 <span class="text-2xl text-cream/60">USDT</span></p>
         <ul class="mt-8 space-y-3 text-cream/80">
           <li class="flex gap-3"><i class="fa-solid fa-check text-teal mt-1.5"></i>Six stages of growth to climb</li>
           <li class="flex gap-3"><i class="fa-solid fa-check text-teal mt-1.5"></i>Up to 60% shared back with the community</li>

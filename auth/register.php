@@ -226,7 +226,7 @@ require_once __DIR__ . '/../includes/header.php';
                     </label>
                     <select id="package_type" name="package_type" class="block w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                         <option value="package_1" <?= ($_POST['package_type'] ?? $pkgParam) === 'package_1' ? 'selected' : '' ?>>
-                            Package I (6 Levels) - 100 USDT
+                            Package I (6 Levels) - 50 USDT
                         </option>
                         <option value="package_2" <?= ($_POST['package_type'] ?? $pkgParam) === 'package_2' ? 'selected' : '' ?>>
                             Package II (7 Levels) - 300 USDT

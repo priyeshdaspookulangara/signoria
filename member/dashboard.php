@@ -214,7 +214,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <div>
                     <div class="flex items-center gap-2">
                         <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
-                        <h2 class="text-xl font-bold text-white">Package I (6 Levels Pool - 100 USDT)</h2>
+                        <h2 class="text-xl font-bold text-white">Package I (6 Levels Pool - 50 USDT)</h2>
                     </div>
                     <p class="text-xs text-slate-400 mt-1">3x Matrix BFS Auto-Spillover Tree Progression</p>
                 </div>
@@ -229,7 +229,7 @@ require_once __DIR__ . '/../includes/header.php';
                         <input type="hidden" name="action" value="activate_package">
                         <input type="hidden" name="package_type" value="package_1">
                         <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md">
-                            Activate Package I (100 USDT)
+                            Activate Package I (50 USDT)
                         </button>
                     </form>
                 <?php endif; ?>

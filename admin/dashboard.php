@@ -108,7 +108,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
                     <h2 class="text-lg font-bold text-white">Package I (6 Levels Pool)</h2>
                 </div>
-                <span class="text-xs font-mono font-bold text-emerald-400">100 USDT Entry</span>
+                <span class="text-xs font-mono font-bold text-emerald-400">50 USDT Entry</span>
             </div>
 
             <div class="grid grid-cols-2 gap-4 mt-6">
