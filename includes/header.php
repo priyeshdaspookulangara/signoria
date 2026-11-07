@@ -43,6 +43,8 @@ $currentPath = $_SERVER['SCRIPT_NAME'] ?? '';
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Standalone Client-Side QR Code Generator -->
+    <script src="/assets/js/qrcode.min.js"></script>
     <style>
         .custom-scroll::-webkit-scrollbar {
             width: 6px;
@@ -126,6 +128,11 @@ $currentPath = $_SERVER['SCRIPT_NAME'] ?? '';
                         USDT Wallet
                     </a>
 
+                    <a href="/member/usdt_activate.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= (str_contains($currentPath, 'member/usdt_activate.php') || str_contains($currentPath, 'usdt_activate')) ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
+                        <i class="fa-solid fa-qrcode w-5 text-center mr-2.5 <?= str_contains($currentPath, 'usdt_activate') ? 'text-white' : 'text-emerald-400' ?>"></i>
+                        USDT Activation
+                    </a>
+
                     <a href="/member/profile.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'member/profile.php') ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
                         <i class="fa-solid fa-user-gear w-5 text-center mr-2.5 <?= str_contains($currentPath, 'member/profile.php') ? 'text-white' : 'text-indigo-400' ?>"></i>
                         Profile & Settings
@@ -150,6 +157,11 @@ $currentPath = $_SERVER['SCRIPT_NAME'] ?? '';
                         <a href="/admin/transactions.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'admin/transactions.php') ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
                             <i class="fa-solid fa-money-bill-transfer w-5 text-center mr-2.5 <?= str_contains($currentPath, 'admin/transactions.php') ? 'text-white' : 'text-amber-400' ?>"></i>
                             USDT Transactions
+                        </a>
+
+                        <a href="/admin/usdt_activations.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= (str_contains($currentPath, 'admin/usdt_activations.php') || str_contains($currentPath, 'usdt-activations')) ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
+                            <i class="fa-solid fa-bolt w-5 text-center mr-2.5 <?= str_contains($currentPath, 'usdt_activations') ? 'text-white' : 'text-yellow-400' ?>"></i>
+                            USDT Activations
                         </a>
 
                         <a href="/admin/wallet_settings.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'admin/wallet_settings.php') ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
