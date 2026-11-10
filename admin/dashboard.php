@@ -61,6 +61,10 @@ require_once __DIR__ . '/../includes/header.php';
             <a href="/admin/users.php" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition">
                 Manage Members
             </a>
+            <a href="/admin/sql_import.php" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white border border-purple-500 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-purple-600/20">
+                <i class="fa-solid fa-database"></i>
+                SQL Import
+            </a>
         </div>
     </div>
 

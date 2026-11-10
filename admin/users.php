@@ -223,18 +223,23 @@ require_once __DIR__ . '/../includes/header.php';
             <p class="text-xs text-slate-400 mt-1">Review, edit, or purge member records, inspect matrix trees, and manage account statuses.</p>
         </div>
 
-        <form method="GET" action="/admin/users.php" class="flex items-center gap-2 w-full sm:w-auto">
-            <input type="text" name="q" value="<?= e($search) ?>" placeholder="Search user or wallet..."
-                class="px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64">
-            <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition">
-                Search
-            </button>
-            <?php if (!empty($search)): ?>
-                <a href="/admin/users.php" class="px-3 py-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs transition">
-                    Clear
-                </a>
-            <?php endif; ?>
-        </form>
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+            <a href="/admin/sql_import.php" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-lg shadow-purple-600/20 whitespace-nowrap">
+                <i class="fa-solid fa-database"></i> SQL Import
+            </a>
+            <form method="GET" action="/admin/users.php" class="flex items-center gap-2 w-full sm:w-auto">
+                <input type="text" name="q" value="<?= e($search) ?>" placeholder="Search user or wallet..."
+                    class="px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64">
+                <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition">
+                    Search
+                </button>
+                <?php if (!empty($search)): ?>
+                    <a href="/admin/users.php" class="px-3 py-2 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs transition">
+                        Clear
+                    </a>
+                <?php endif; ?>
+            </form>
+        </div>
     </div>
 
     <!-- Users Table -->
