@@ -170,6 +170,9 @@ class BfsMatrixEngine {
         // 2. Check if this placement or upline reached a rebirth milestone
         self::checkAndTriggerRebirths($pdo, $nodeData);
 
+        // 3. Check if primary node qualified for automated Tier 2 upgrade from Level 5
+        self::checkAndTriggerTier2Upgrade($pdo, $nodeData);
+
         // 3. Log activity
         $desc = $isRebirth
             ? "Rebirth booster slot activated at Level {$level} (Pos #{$nextPos}) in {$packageType}"
@@ -313,6 +316,66 @@ class BfsMatrixEngine {
                 }
             }
         }
+    }
+
+    /**
+     * Check if a primary Tier 1 node reached Level 5 and qualifies for automated
+     * reservation and upgrade of 300 USDT into Tier 2 (package_2).
+     */
+    public static function checkAndTriggerTier2Upgrade(PDO $pdo, array $node): void {
+        // Booster / rebirth slots should not trigger upgrades
+        if (!empty($node['is_rebirth'])) {
+            return;
+        }
+
+        // Only Tier 1 nodes reaching Level 5 qualify
+        if ($node['package_type'] !== 'package_1' || (int)$node['level'] < 5) {
+            return;
+        }
+
+        $userId = (int)$node['user_id'];
+
+        // Check if user already has an active or rebirthed node in package_2
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM matrix_nodes
+            WHERE user_id = :uid AND package_type = 'package_2'
+        ");
+        $stmt->execute([':uid' => $userId]);
+        $alreadyInPackage2 = (int)$stmt->fetchColumn() > 0;
+
+        if ($alreadyInPackage2) {
+            return;
+        }
+
+        // Check if user already had 300 USDT reserved for package_upgrade
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM transactions
+            WHERE user_id = :uid AND type = 'package_upgrade' AND amount_usdt >= 300.00
+        ");
+        $stmt->execute([':uid' => $userId]);
+        $alreadyUpgraded = (int)$stmt->fetchColumn() > 0;
+
+        if ($alreadyUpgraded) {
+            return;
+        }
+
+        $upgradeAmount = 300.00;
+
+        // Deduct 300 USDT upgrade charge reserved from Level 5 Tier 1 earnings
+        $txStmt = $pdo->prepare("
+            INSERT INTO transactions
+            (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+            VALUES
+            (:uid, 'package_upgrade', :amt, NULL, 'completed', :details, NOW())
+        ");
+        $txStmt->execute([
+            ':uid'     => $userId,
+            ':amt'     => $upgradeAmount,
+            ':details' => "Automated plan upgrade reservation of 300 USDT to Tier 2 (Package II) from Level 5 of Tier 1",
+        ]);
+
+        // Place user into Tier 2 (package_2)
+        self::placeNode($pdo, $userId, 'package_2');
     }
 
     /**

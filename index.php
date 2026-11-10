@@ -171,6 +171,7 @@ tailwind.config={theme:{extend:{
      <li class="flex gap-3"><i class="fa-solid fa-circle-check text-gold mt-0.5"></i>Room for over 1,000 community members</li>
      <li class="flex gap-3"><i class="fa-solid fa-circle-check text-gold mt-0.5"></i>Automatic team placement</li>
      <li class="flex gap-3"><i class="fa-solid fa-circle-check text-gold mt-0.5"></i>5 rebirth opportunities (Levels 4, 5, and 6)</li>
+     <li class="flex gap-3"><i class="fa-solid fa-circle-check text-gold mt-0.5"></i>300 USDT upgrade reserved at Level 5 to enter Tier 2</li>
     </ul>
     <a href="/auth/register.php?pkg=package_1" class="mt-9 block text-center px-8 py-4 rounded-full font-bold border border-gold/60 text-lgold hover:bg-gold hover:text-navy transition">Start with Package I</a>
    </article>
