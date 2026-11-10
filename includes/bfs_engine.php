@@ -4,8 +4,8 @@
  * Operating strictly with USDT (Tether)
  *
  * Matrix Pools:
- * - Package 1 (6 Levels): Entry 100 USDT, 60% upline distribution, automated rebirths at Levels 4, 5, 6
- * - Package 2 (7 Levels): Entry 300 USDT, 60% upline distribution, automated rebirths at Levels 4, 5, 6, 7
+ * - Package 1 (6 Levels): Entry 50 USDT, 60% upline distribution, automated rebirths at Levels 4, 5, 6 (5 rebirths total: L4: 1, L5: 1, L6: 3)
+ * - Package 2 (7 Levels): Entry 300 USDT, 60% upline distribution, automated rebirths at Levels 4, 5, 6, 7 (10 rebirths total: L4: 1, L5: 2, L6: 3, L7: 4)
  */
 
 declare(strict_types=1);
@@ -23,7 +23,11 @@ class BfsMatrixEngine {
             'max_levels'     => 6,
             'entry_amount'   => 50.00,
             'rebirth_fee'    => 10.00,
-            'rebirth_levels' => [4, 5, 6],
+            'rebirth_levels' => [
+                4 => 1,
+                5 => 1,
+                6 => 3,
+            ], // 5 rebirths total (L4: 1, L5: 1, L6: 3)
             'distribution_pct' => 0.60, // 60% of entry amount distributed to active uplines
         ],
         'package_2' => [
@@ -31,7 +35,12 @@ class BfsMatrixEngine {
             'max_levels'     => 7,
             'entry_amount'   => 300.00,
             'rebirth_fee'    => 50.00,
-            'rebirth_levels' => [4, 5, 6, 7],
+            'rebirth_levels' => [
+                4 => 1,
+                5 => 2,
+                6 => 3,
+                7 => 4,
+            ], // 10 rebirths total (L4: 1, L5: 2, L6: 3, L7: 4)
             'distribution_pct' => 0.60, // 60% of entry amount distributed to active uplines
         ],
     ];
@@ -161,6 +170,9 @@ class BfsMatrixEngine {
         // 2. Check if this placement or upline reached a rebirth milestone
         self::checkAndTriggerRebirths($pdo, $nodeData);
 
+        // 3. Check if primary node qualified for automated Tier 2 upgrade from Level 5
+        self::checkAndTriggerTier2Upgrade($pdo, $nodeData);
+
         // 3. Log activity
         $desc = $isRebirth
             ? "Rebirth booster slot activated at Level {$level} (Pos #{$nextPos}) in {$packageType}"
@@ -260,45 +272,110 @@ class BfsMatrixEngine {
 
         $config = self::getConfig($node['package_type']);
         $rebirthLevels = $config['rebirth_levels'];
+        $nodeLevel = (int)$node['level'];
 
         // Check if newly placed primary node reached a designated rebirth trigger level
-        // and hasn't already spawned a rebirth booster slot
-        if (in_array($node['level'], $rebirthLevels, true)) {
-            // Check if user has sufficient funds or if rebirth is auto-debited
+        if (isset($rebirthLevels[$nodeLevel])) {
+            $requiredRebirthCount = (int)$rebirthLevels[$nodeLevel];
             $userId = (int)$node['user_id'];
 
-            // Check if this specific node already triggered a rebirth
+            // Check how many rebirths this specific node has already spawned
             $stmt = $pdo->prepare("
                 SELECT COUNT(*) FROM matrix_nodes
                 WHERE rebirth_source_node_id = :node_id
             ");
             $stmt->execute([':node_id' => $node['id']]);
-            $alreadyRebirthed = (int)$stmt->fetchColumn() > 0;
+            $existingRebirths = (int)$stmt->fetchColumn();
 
-            if (!$alreadyRebirthed) {
+            $rebirthsToCreate = $requiredRebirthCount - $existingRebirths;
+
+            if ($rebirthsToCreate > 0) {
                 $rebirthFee = $config['rebirth_fee'];
 
-                // Deduct rebirth fee
-                $txStmt = $pdo->prepare("
-                    INSERT INTO transactions
-                    (user_id, type, amount_usdt, tx_hash, status, details, created_at)
-                    VALUES
-                    (:uid, 'rebirth_fee', :fee, NULL, 'completed', :details, NOW())
-                ");
-                $txStmt->execute([
-                    ':uid'     => $userId,
-                    ':fee'     => $rebirthFee,
-                    ':details' => "Automated rebirth slot fee for reaching Level {$node['level']} in {$node['package_type']}",
-                ]);
-
-                // Update node status
+                // Update node status to rebirthed
                 $upStmt = $pdo->prepare("UPDATE matrix_nodes SET status = 'rebirthed' WHERE id = :id");
                 $upStmt->execute([':id' => $node['id']]);
 
-                // Spawn new booster slot into BFS queue
-                self::placeNode($pdo, $userId, $node['package_type'], true, $node['id']);
+                for ($i = 1; $i <= $rebirthsToCreate; $i++) {
+                    $rebirthIndex = $existingRebirths + $i;
+                    // Deduct rebirth fee
+                    $txStmt = $pdo->prepare("
+                        INSERT INTO transactions
+                        (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+                        VALUES
+                        (:uid, 'rebirth_fee', :fee, NULL, 'completed', :details, NOW())
+                    ");
+                    $txStmt->execute([
+                        ':uid'     => $userId,
+                        ':fee'     => $rebirthFee,
+                        ':details' => "Automated rebirth slot #{$rebirthIndex}/{$requiredRebirthCount} fee for reaching Level {$node['level']} in {$node['package_type']}",
+                    ]);
+
+                    // Spawn new booster slot into BFS queue
+                    self::placeNode($pdo, $userId, $node['package_type'], true, (int)$node['id']);
+                }
             }
         }
+    }
+
+    /**
+     * Check if a primary Tier 1 node reached Level 5 and qualifies for automated
+     * reservation and upgrade of 300 USDT into Tier 2 (package_2).
+     */
+    public static function checkAndTriggerTier2Upgrade(PDO $pdo, array $node): void {
+        // Booster / rebirth slots should not trigger upgrades
+        if (!empty($node['is_rebirth'])) {
+            return;
+        }
+
+        // Only Tier 1 nodes reaching Level 5 qualify
+        if ($node['package_type'] !== 'package_1' || (int)$node['level'] < 5) {
+            return;
+        }
+
+        $userId = (int)$node['user_id'];
+
+        // Check if user already has an active or rebirthed node in package_2
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM matrix_nodes
+            WHERE user_id = :uid AND package_type = 'package_2'
+        ");
+        $stmt->execute([':uid' => $userId]);
+        $alreadyInPackage2 = (int)$stmt->fetchColumn() > 0;
+
+        if ($alreadyInPackage2) {
+            return;
+        }
+
+        // Check if user already had 300 USDT reserved for package_upgrade
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM transactions
+            WHERE user_id = :uid AND type = 'package_upgrade' AND amount_usdt >= 300.00
+        ");
+        $stmt->execute([':uid' => $userId]);
+        $alreadyUpgraded = (int)$stmt->fetchColumn() > 0;
+
+        if ($alreadyUpgraded) {
+            return;
+        }
+
+        $upgradeAmount = 300.00;
+
+        // Deduct 300 USDT upgrade charge reserved from Level 5 Tier 1 earnings
+        $txStmt = $pdo->prepare("
+            INSERT INTO transactions
+            (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+            VALUES
+            (:uid, 'package_upgrade', :amt, NULL, 'completed', :details, NOW())
+        ");
+        $txStmt->execute([
+            ':uid'     => $userId,
+            ':amt'     => $upgradeAmount,
+            ':details' => "Automated plan upgrade reservation of 300 USDT to Tier 2 (Package II) from Level 5 of Tier 1",
+        ]);
+
+        // Place user into Tier 2 (package_2)
+        self::placeNode($pdo, $userId, 'package_2');
     }
 
     /**
