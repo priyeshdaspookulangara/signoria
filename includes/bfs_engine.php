@@ -4,8 +4,8 @@
  * Operating strictly with USDT (Tether)
  *
  * Matrix Pools:
- * - Package 1 (6 Levels): Entry 100 USDT, 60% upline distribution, automated rebirths at Levels 4, 5, 6
- * - Package 2 (7 Levels): Entry 300 USDT, 60% upline distribution, automated rebirths at Levels 4, 5, 6, 7
+ * - Package 1 (6 Levels): Entry 50 USDT, 60% upline distribution, automated rebirths at Levels 4, 5, 6 (5 rebirths total: L4: 1, L5: 1, L6: 3)
+ * - Package 2 (7 Levels): Entry 300 USDT, 60% upline distribution, automated rebirths at Levels 4, 5, 6, 7 (10 rebirths total: L4: 1, L5: 2, L6: 3, L7: 4)
  */
 
 declare(strict_types=1);
@@ -23,7 +23,11 @@ class BfsMatrixEngine {
             'max_levels'     => 6,
             'entry_amount'   => 50.00,
             'rebirth_fee'    => 10.00,
-            'rebirth_levels' => [4, 5, 6],
+            'rebirth_levels' => [
+                4 => 1,
+                5 => 1,
+                6 => 3,
+            ], // 5 rebirths total (L4: 1, L5: 1, L6: 3)
             'distribution_pct' => 0.60, // 60% of entry amount distributed to active uplines
         ],
         'package_2' => [
@@ -31,7 +35,12 @@ class BfsMatrixEngine {
             'max_levels'     => 7,
             'entry_amount'   => 300.00,
             'rebirth_fee'    => 50.00,
-            'rebirth_levels' => [4, 5, 6, 7],
+            'rebirth_levels' => [
+                4 => 1,
+                5 => 2,
+                6 => 3,
+                7 => 4,
+            ], // 10 rebirths total (L4: 1, L5: 2, L6: 3, L7: 4)
             'distribution_pct' => 0.60, // 60% of entry amount distributed to active uplines
         ],
     ];
@@ -260,43 +269,48 @@ class BfsMatrixEngine {
 
         $config = self::getConfig($node['package_type']);
         $rebirthLevels = $config['rebirth_levels'];
+        $nodeLevel = (int)$node['level'];
 
         // Check if newly placed primary node reached a designated rebirth trigger level
-        // and hasn't already spawned a rebirth booster slot
-        if (in_array($node['level'], $rebirthLevels, true)) {
-            // Check if user has sufficient funds or if rebirth is auto-debited
+        if (isset($rebirthLevels[$nodeLevel])) {
+            $requiredRebirthCount = (int)$rebirthLevels[$nodeLevel];
             $userId = (int)$node['user_id'];
 
-            // Check if this specific node already triggered a rebirth
+            // Check how many rebirths this specific node has already spawned
             $stmt = $pdo->prepare("
                 SELECT COUNT(*) FROM matrix_nodes
                 WHERE rebirth_source_node_id = :node_id
             ");
             $stmt->execute([':node_id' => $node['id']]);
-            $alreadyRebirthed = (int)$stmt->fetchColumn() > 0;
+            $existingRebirths = (int)$stmt->fetchColumn();
 
-            if (!$alreadyRebirthed) {
+            $rebirthsToCreate = $requiredRebirthCount - $existingRebirths;
+
+            if ($rebirthsToCreate > 0) {
                 $rebirthFee = $config['rebirth_fee'];
 
-                // Deduct rebirth fee
-                $txStmt = $pdo->prepare("
-                    INSERT INTO transactions
-                    (user_id, type, amount_usdt, tx_hash, status, details, created_at)
-                    VALUES
-                    (:uid, 'rebirth_fee', :fee, NULL, 'completed', :details, NOW())
-                ");
-                $txStmt->execute([
-                    ':uid'     => $userId,
-                    ':fee'     => $rebirthFee,
-                    ':details' => "Automated rebirth slot fee for reaching Level {$node['level']} in {$node['package_type']}",
-                ]);
-
-                // Update node status
+                // Update node status to rebirthed
                 $upStmt = $pdo->prepare("UPDATE matrix_nodes SET status = 'rebirthed' WHERE id = :id");
                 $upStmt->execute([':id' => $node['id']]);
 
-                // Spawn new booster slot into BFS queue
-                self::placeNode($pdo, $userId, $node['package_type'], true, $node['id']);
+                for ($i = 1; $i <= $rebirthsToCreate; $i++) {
+                    $rebirthIndex = $existingRebirths + $i;
+                    // Deduct rebirth fee
+                    $txStmt = $pdo->prepare("
+                        INSERT INTO transactions
+                        (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+                        VALUES
+                        (:uid, 'rebirth_fee', :fee, NULL, 'completed', :details, NOW())
+                    ");
+                    $txStmt->execute([
+                        ':uid'     => $userId,
+                        ':fee'     => $rebirthFee,
+                        ':details' => "Automated rebirth slot #{$rebirthIndex}/{$requiredRebirthCount} fee for reaching Level {$node['level']} in {$node['package_type']}",
+                    ]);
+
+                    // Spawn new booster slot into BFS queue
+                    self::placeNode($pdo, $userId, $node['package_type'], true, (int)$node['id']);
+                }
             }
         }
     }

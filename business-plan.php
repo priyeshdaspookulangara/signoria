@@ -69,7 +69,7 @@
                 <tr><th scope="row" class="text-left font-semibold text-paper">Entry price</th><td>50 USDT</td><td>300 USDT</td></tr>
                 <tr><th scope="row" class="text-left font-semibold text-paper">Levels of growth</th><td>6 levels</td><td>7 levels</td></tr>
                 <tr><th scope="row" class="text-left font-semibold text-paper">Community capacity</th><td>1,092 members<br><span class="text-xs text-paper/50">3 + 9 + 27 + 81 + 243 + 729</span></td><td>3,279 members<br><span class="text-xs text-paper/50">up to 2,187 on level 7</span></td></tr>
-                <tr><th scope="row" class="text-left font-semibold text-paper">Renewal opportunities</th><td>Levels 4, 5 and 6</td><td>Levels 4, 5, 6 and 7</td></tr>
+                <tr><th scope="row" class="text-left font-semibold text-paper">Renewal opportunities</th><td>5 rebirths<br><span class="text-xs text-paper/50">L4: 1 &middot; L5: 1 &middot; L6: 3</span></td><td>10 rebirths<br><span class="text-xs text-paper/50">L4: 1 &middot; L5: 2 &middot; L6: 3 &middot; L7: 4</span></td></tr>
                 <tr><th scope="row" class="text-left font-semibold text-paper">Team placement</th><td>Automatic</td><td>Automatic, on its own path</td></tr>
               </tbody>
             </table>
