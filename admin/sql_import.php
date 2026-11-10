@@ -44,21 +44,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($rawSql)) {
         setFlash('warning', 'Please paste at least one SQL INSERT query.');
     } else {
+        // Pre-process: Strip SQL comments (-- line comments and /* multi-line comments */)
+        $cleanSql = preg_replace('/(--[^\r\n]*)|(\/\*[\s\S]*?\*\/)/', '', $rawSql);
+
         // Normalize line breaks and split by statement semicolon
-        // We will process statements one by one in a transaction or individually with detailed reporting
-        $statements = array_filter(
-            array_map('trim', explode(';', $rawSql)),
-            fn($q) => !empty($q)
-        );
+        $rawStatements = explode(';', $cleanSql);
+        $statements = [];
+        foreach ($rawStatements as $rawStmt) {
+            $trimmed = trim($rawStmt);
+            if (!empty($trimmed)) {
+                $statements[] = $trimmed;
+            }
+        }
 
         $successCount = 0;
         $errorCount = 0;
 
         foreach ($statements as $index => $stmtText) {
             $stmtNumber = $index + 1;
-            // Basic guard: allow INSERT INTO users queries or general INSERT INTO queries
-            if (!preg_match('/^\s*INSERT\s+INTO\s+[`\'"]?users[`\'"]?/i', $stmtText)) {
-                // If it's another INSERT query or table, try executing directly
+            // Check if this statement is an INSERT (or INSERT IGNORE) into the users table
+            $isUsersInsert = (bool)preg_match('/^\s*INSERT\s+(?:IGNORE\s+)?INTO\s+[`\'"]?users[`\'"]?/i', $stmtText);
+
+            if (!$isUsersInsert) {
+                // If it is another table or non-users query, execute directly
                 try {
                     $pdo->exec($stmtText);
                     $results[] = [
@@ -66,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'status' => 'success',
                         'type' => 'raw_sql',
                         'message' => 'Executed raw SQL statement successfully.',
-                        'query' => substr($stmtText, 0, 100) . '...'
+                        'query' => substr($stmtText, 0, 120) . (strlen($stmtText) > 120 ? '...' : '')
                     ];
                     $successCount++;
                 } catch (Throwable $e) {
@@ -75,34 +83,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'status' => 'error',
                         'type' => 'raw_sql',
                         'message' => 'Error: ' . $e->getMessage(),
-                        'query' => substr($stmtText, 0, 100) . '...'
+                        'query' => substr($stmtText, 0, 120) . (strlen($stmtText) > 120 ? '...' : '')
                     ];
                     $errorCount++;
                 }
                 continue;
             }
 
-            // It is an INSERT INTO users query! We will execute and intercept the user registration lifecycle
+            // It is an INSERT [IGNORE] INTO users query! Execute and intercept the user registration lifecycle
             $pdo->beginTransaction();
             try {
-                // Pre-check existing usernames before executing to detect new inserted user ID
+                // Snapshot existing user IDs prior to execution to detect newly created accounts
                 $existingIds = $pdo->query("SELECT id FROM users")->fetchAll(PDO::FETCH_COLUMN);
 
-                // Execute the INSERT statement
+                // Execute statement
                 $pdo->exec($stmtText);
                 $insertedId = (int)$pdo->lastInsertId();
 
                 // If lastInsertId returned 0 (e.g. bulk insert), find newly created user IDs
                 $newUserIds = [];
-                if ($insertedId > 0) {
+                if ($insertedId > 0 && !in_array($insertedId, $existingIds)) {
                     $newUserIds[] = $insertedId;
                 } else {
                     $allCurrentIds = $pdo->query("SELECT id FROM users")->fetchAll(PDO::FETCH_COLUMN);
-                    $newUserIds = array_diff($allCurrentIds, $existingIds);
+                    $newUserIds = array_values(array_diff($allCurrentIds, $existingIds));
                 }
 
+                // If statement executed but 0 new users were inserted (e.g. INSERT IGNORE skipped existing duplicates)
                 if (empty($newUserIds)) {
-                    throw new RuntimeException("No user record was created by this statement.");
+                    $pdo->commit();
+                    $results[] = [
+                        'stmt' => $stmtNumber,
+                        'status' => 'info',
+                        'type' => 'user_registration',
+                        'message' => 'Statement executed successfully. No new users added (duplicate usernames/records were safely ignored).',
+                        'query' => substr($stmtText, 0, 120) . (strlen($stmtText) > 120 ? '...' : '')
+                    ];
+                    $successCount++;
+                    continue;
                 }
 
                 $processedUsers = [];
