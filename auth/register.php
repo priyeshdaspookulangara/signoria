@@ -10,10 +10,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/bfs_engine.php';
 
 // Redirect if already logged in
-if (isLoggedIn()) {
-    header('Location: /member/dashboard.php');
-    exit;
-}
+requireGuest();
 
 $pdo = getDatabaseConnection();
 

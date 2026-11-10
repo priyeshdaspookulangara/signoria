@@ -64,13 +64,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Fetch balances and earnings
 $usdtBalance = getUserUsdtBalance($userId);
 
-// Fetch Total Payouts Earned
+// Fetch Total Payouts Earned (Matrix Payouts)
 $payoutStmt = $pdo->prepare("
     SELECT COALESCE(SUM(amount_usdt), 0) FROM transactions
     WHERE user_id = :uid AND type = 'matrix_payout' AND status = 'completed'
 ");
 $payoutStmt->execute([':uid' => $userId]);
 $totalEarnings = (float)$payoutStmt->fetchColumn();
+
+// Fetch Referral Income Earned
+$refIncomeStmt = $pdo->prepare("
+    SELECT COALESCE(SUM(amount_usdt), 0) FROM transactions
+    WHERE user_id = :uid AND type = 'referral_income' AND status = 'completed'
+");
+$refIncomeStmt->execute([':uid' => $userId]);
+$referralIncome = (float)$refIncomeStmt->fetchColumn();
+
+// Fetch Direct Referrals Count
+$refCountStmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE sponsor_id = :uid");
+$refCountStmt->execute([':uid' => $userId]);
+$directReferralCount = (int)$refCountStmt->fetchColumn();
 
 // Fetch Total Rebirth Deductions
 $rebirthStmt = $pdo->prepare("
@@ -147,60 +160,84 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
     <!-- Metrics Overview -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg relative overflow-hidden">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
             <div class="flex justify-between items-center">
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Balance</span>
-                <span class="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-wallet"></i></span>
+                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Available Balance</span>
+                <span class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400"><i class="fa-solid fa-wallet text-xs"></i></span>
             </div>
-            <div class="mt-4">
-                <span class="text-3xl font-extrabold text-white"><?= formatUsdt($usdtBalance) ?></span>
-                <span class="text-xs font-bold text-emerald-400 ml-1">USDT</span>
+            <div class="mt-3">
+                <span class="text-2xl font-extrabold text-white"><?= formatUsdt($usdtBalance) ?></span>
+                <span class="text-[11px] font-bold text-emerald-400 ml-1">USDT</span>
             </div>
-            <div class="mt-3 flex gap-2">
-                <a href="/member/wallet.php" class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1">
-                    Deposit / Withdraw <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            <div class="mt-2.5">
+                <a href="/member/wallet.php" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1">
+                    Wallet <i class="fa-solid fa-arrow-right text-[9px]"></i>
                 </a>
             </div>
         </div>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg relative overflow-hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
             <div class="flex justify-between items-center">
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Matrix Earnings</span>
-                <span class="p-2.5 rounded-xl bg-teal-500/10 text-teal-400"><i class="fa-solid fa-chart-line"></i></span>
+                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Direct Referrals</span>
+                <span class="p-2 rounded-xl bg-indigo-500/10 text-indigo-400"><i class="fa-solid fa-users text-xs"></i></span>
             </div>
-            <div class="mt-4">
-                <span class="text-3xl font-extrabold text-white"><?= formatUsdt($totalEarnings) ?></span>
-                <span class="text-xs font-bold text-teal-400 ml-1">USDT</span>
+            <div class="mt-3">
+                <span class="text-2xl font-extrabold text-indigo-400"><?= $directReferralCount ?></span>
+                <span class="text-[11px] font-bold text-slate-400 ml-1">Members</span>
             </div>
-            <p class="mt-3 text-xs text-slate-500">Accumulated 60% upline rewards</p>
+            <p class="mt-2.5 text-[11px] text-slate-500">Personally sponsored</p>
         </div>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg relative overflow-hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
             <div class="flex justify-between items-center">
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rebirth Booster Slots</span>
-                <span class="p-2.5 rounded-xl bg-purple-500/10 text-purple-400"><i class="fa-solid fa-arrows-rotate"></i></span>
+                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Referral Income</span>
+                <span class="p-2 rounded-xl bg-cyan-500/10 text-cyan-400"><i class="fa-solid fa-hand-holding-dollar text-xs"></i></span>
             </div>
-            <div class="mt-4">
-                <span class="text-3xl font-extrabold text-white"><?= $userRebirthSlots ?></span>
-                <span class="text-xs font-bold text-purple-400 ml-1">Slots</span>
+            <div class="mt-3">
+                <span class="text-2xl font-extrabold text-cyan-400"><?= formatUsdt($referralIncome) ?></span>
+                <span class="text-[11px] font-bold text-slate-400 ml-1">USDT</span>
             </div>
-            <p class="mt-3 text-xs text-slate-500"><?= formatUsdt($totalRebirthFees) ?> USDT Reinvested</p>
+            <p class="mt-2.5 text-[11px] text-slate-500">Direct sponsor bonus</p>
         </div>
 
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg relative overflow-hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
             <div class="flex justify-between items-center">
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Payout Wallet</span>
-                <span class="p-2.5 rounded-xl bg-blue-500/10 text-blue-400"><i class="fa-solid fa-link"></i></span>
+                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Matrix Earnings</span>
+                <span class="p-2 rounded-xl bg-teal-500/10 text-teal-400"><i class="fa-solid fa-chart-line text-xs"></i></span>
             </div>
-            <div class="mt-4">
+            <div class="mt-3">
+                <span class="text-2xl font-extrabold text-white"><?= formatUsdt($totalEarnings) ?></span>
+                <span class="text-[11px] font-bold text-teal-400 ml-1">USDT</span>
+            </div>
+            <p class="mt-2.5 text-[11px] text-slate-500">60% upline rewards</p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+            <div class="flex justify-between items-center">
+                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Rebirth Booster</span>
+                <span class="p-2 rounded-xl bg-purple-500/10 text-purple-400"><i class="fa-solid fa-arrows-rotate text-xs"></i></span>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-extrabold text-white"><?= $userRebirthSlots ?></span>
+                <span class="text-[11px] font-bold text-purple-400 ml-1">Slots</span>
+            </div>
+            <p class="mt-2.5 text-[11px] text-slate-500"><?= formatUsdt($totalRebirthFees) ?> USDT Reinvested</p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+            <div class="flex justify-between items-center">
+                <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Payout Wallet</span>
+                <span class="p-2 rounded-xl bg-blue-500/10 text-blue-400"><i class="fa-solid fa-link text-xs"></i></span>
+            </div>
+            <div class="mt-3">
                 <span class="text-xs font-mono text-slate-300 block truncate" title="<?= e($user['usdt_wallet']) ?>">
                     <?= e($user['usdt_wallet'] ?: 'Not configured') ?>
                 </span>
             </div>
-            <div class="mt-3">
-                <a href="/member/profile.php" class="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1">
-                    Update Wallet <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+            <div class="mt-2.5">
+                <a href="/member/profile.php" class="text-[11px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1">
+                    Settings <i class="fa-solid fa-pen-to-square text-[9px]"></i>
                 </a>
             </div>
         </div>

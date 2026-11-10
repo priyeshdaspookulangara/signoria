@@ -54,6 +54,13 @@ function isAuthenticated(): bool {
 }
 
 /**
+ * Alias for isAuthenticated()
+ */
+function isLoggedIn(): bool {
+    return isAuthenticated();
+}
+
+/**
  * Check if the authenticated user is an administrator
  */
 function isAdmin(): bool {

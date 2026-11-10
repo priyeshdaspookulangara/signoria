@@ -164,6 +164,11 @@ $currentPath = $_SERVER['SCRIPT_NAME'] ?? '';
                             USDT Activations
                         </a>
 
+                        <a href="/admin/sql_import.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'admin/sql_import.php') ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
+                            <i class="fa-solid fa-database w-5 text-center mr-2.5 <?= str_contains($currentPath, 'admin/sql_import.php') ? 'text-white' : 'text-fuchsia-400' ?>"></i>
+                            <span>SQL Registration</span>
+                        </a>
+
                         <a href="/admin/wallet_settings.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'admin/wallet_settings.php') ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
                             <i class="fa-solid fa-building-columns w-5 text-center mr-2.5 <?= str_contains($currentPath, 'admin/wallet_settings.php') ? 'text-white' : 'text-emerald-400' ?>"></i>
                             Company Wallet & QR

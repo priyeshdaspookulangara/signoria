@@ -79,7 +79,7 @@ CREATE TABLE `matrix_nodes` (
 CREATE TABLE `transactions` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `user_id` INT NOT NULL,
-  `type` ENUM('deposit', 'withdrawal', 'matrix_payout', 'rebirth_fee', 'package_upgrade') NOT NULL,
+  `type` ENUM('deposit', 'withdrawal', 'matrix_payout', 'rebirth_fee', 'package_upgrade', 'referral_income') NOT NULL,
   `amount_usdt` DECIMAL(18,2) NOT NULL,
   `tx_hash` VARCHAR(128) NULL,
   `status` ENUM('pending', 'completed', 'failed') NOT NULL DEFAULT 'pending',
@@ -141,11 +141,11 @@ CREATE TABLE `system_settings` (
 
 -- Users
 INSERT INTO `users` (`id`, `username`, `sponsor_id`, `email`, `password`, `usdt_wallet`, `usdt_network`, `usdt_trc20_address`, `usdt_bep20_address`, `role`, `status`, `created_at`) VALUES
-(1, 'admin', NULL, 'admin@matrixmlm.com', '$2y$10$PFGAQc/UMuGtLnwXhFDbZeSXSY9iDLLNsoONAGJSvNocZ5v0wp7zC', '0x572790c26FC062C247D0e1797D646F20a093AE14', 'BEP20', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', '0x572790c26FC062C247D0e1797D646F20a093AE14', 'admin', 'active', NOW()),
-(2, 'alex_leader', 1, 'alex@example.com', '$2y$10$gkJ3ou2VEW3EGrNU6Xw03.psMFucWWAgFljJ9hrNrCcs1nUi4RwXi', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE', 'TRC20', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE', '0x71C8395B0F751beF48cf1E8e8A3669a8B8497645', 'member', 'active', NOW()),
-(3, 'bob_crypto', 2, 'bob@example.com', '$2y$10$gkJ3ou2VEW3EGrNU6Xw03.psMFucWWAgFljJ9hrNrCcs1nUi4RwXi', 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn', 'TRC20', 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn', '0x21C8395B0F751beF48cf1E8e8A3669a8B8497123', 'member', 'active', NOW()),
-(4, 'carol_trader', 2, 'carol@example.com', '$2y$10$gkJ3ou2VEW3EGrNU6Xw03.psMFucWWAgFljJ9hrNrCcs1nUi4RwXi', 'TVDGm34jDYz31GkXU1W2rPxsghSfzghPDm', 'TRC20', 'TVDGm34jDYz31GkXU1W2rPxsghSfzghPDm', '0x31C8395B0F751beF48cf1E8e8A3669a8B8497456', 'member', 'active', NOW()),
-(5, 'david_defi', 3, 'david@example.com', '$2y$10$gkJ3ou2VEW3EGrNU6Xw03.psMFucWWAgFljJ9hrNrCcs1nUi4RwXi', 'TK9Xn5H6eT31GkXU1W2rPxsghSfzghPDk', 'TRC20', 'TK9Xn5H6eT31GkXU1W2rPxsghSfzghPDk', '0x41C8395B0F751beF48cf1E8e8A3669a8B8497789', 'member', 'active', NOW());
+(1, 'admin', NULL, 'admin@matrixmlm.com', '$2y$10$RgRo9x2bqGFj2ekH05QMpOGffs2l2yxz3k8h7hd9R.zURElM8EtQu', '0x572790c26FC062C247D0e1797D646F20a093AE14', 'BEP20', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', '0x572790c26FC062C247D0e1797D646F20a093AE14', 'admin', 'active', NOW()),
+(2, 'alex_leader', 1, 'alex@example.com', '$2y$10$RgRo9x2bqGFj2ekH05QMpOGffs2l2yxz3k8h7hd9R.zURElM8EtQu', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE', 'TRC20', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE', '0x71C8395B0F751beF48cf1E8e8A3669a8B8497645', 'member', 'active', NOW()),
+(3, 'bob_crypto', 2, 'bob@example.com', '$2y$10$RgRo9x2bqGFj2ekH05QMpOGffs2l2yxz3k8h7hd9R.zURElM8EtQu', 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn', 'TRC20', 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn', '0x21C8395B0F751beF48cf1E8e8A3669a8B8497123', 'member', 'active', NOW()),
+(4, 'carol_trader', 2, 'carol@example.com', '$2y$10$RgRo9x2bqGFj2ekH05QMpOGffs2l2yxz3k8h7hd9R.zURElM8EtQu', 'TVDGm34jDYz31GkXU1W2rPxsghSfzghPDm', 'TRC20', 'TVDGm34jDYz31GkXU1W2rPxsghSfzghPDm', '0x31C8395B0F751beF48cf1E8e8A3669a8B8497456', 'member', 'active', NOW()),
+(5, 'david_defi', 3, 'david@example.com', '$2y$10$RgRo9x2bqGFj2ekH05QMpOGffs2l2yxz3k8h7hd9R.zURElM8EtQu', 'TK9Xn5H6eT31GkXU1W2rPxsghSfzghPDk', 'TRC20', 'TK9Xn5H6eT31GkXU1W2rPxsghSfzghPDk', '0x41C8395B0F751beF48cf1E8e8A3669a8B8497789', 'member', 'active', NOW());
 
 -- Packages Seed
 INSERT INTO `packages` (`id`, `name`, `code`, `inr_price`, `usdt_price`, `matrix_type`, `description`, `status`) VALUES

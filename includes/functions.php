@@ -38,11 +38,11 @@ function parseUsdt(float|string|int|null $amount): string {
 function getUserUsdtBalance(int $userId): float {
     $pdo = getDatabaseConnection();
 
-    // Total credits: completed deposits and completed matrix_payouts
+    // Total credits: completed deposits, completed matrix_payouts, and referral_income
     $stmt = $pdo->prepare("
         SELECT COALESCE(SUM(amount_usdt), 0) AS total_in
         FROM transactions
-        WHERE user_id = :uid AND status = 'completed' AND type IN ('deposit', 'matrix_payout')
+        WHERE user_id = :uid AND status = 'completed' AND type IN ('deposit', 'matrix_payout', 'referral_income')
     ");
     $stmt->execute([':uid' => $userId]);
     $totalIn = (float)$stmt->fetchColumn();
