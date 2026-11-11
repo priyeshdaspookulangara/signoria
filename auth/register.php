@@ -179,7 +179,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     logActivity($newUserId, "User registered with USDT payment #{$pmtId} (TXID: {$txHash})");
 
-                    setFlash('success', "Registration submitted! Your payment of {$calcUsdt} USDT ({$network}) is pending administrator verification. Once approved, you will be placed into the BFS matrix.");
+                    // Send confirmation email to customer
+                    sendRegistrationConfirmationEmail([
+                        'email'        => $email,
+                        'username'     => $username,
+                        'sponsor'      => !empty($sponsor) ? $sponsor : 'Direct System',
+                        'package_name' => $selectedPkg['name'] ?? 'Package I',
+                        'status'       => 'pending',
+                        'tx_hash'      => $txHash,
+                    ]);
+
+                    setFlash('success', "Registration submitted! A confirmation email has been sent to {$email}. Your payment of {$calcUsdt} USDT ({$network}) is pending administrator verification. Once approved, you will be placed into the BFS matrix.");
                     header('Location: /auth/login.php');
                     exit;
 
@@ -213,7 +223,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     logActivity($newUserId, "User registered and placed into {$packageType} at Position #{$nodePlaced['position_index']}");
 
-                    setFlash('success', "Welcome {$username}! Your account is active and placed into {$packageType} at Level {$nodePlaced['level']}.");
+                    // Send confirmation email to customer
+                    sendRegistrationConfirmationEmail([
+                        'email'        => $email,
+                        'username'     => $username,
+                        'sponsor'      => !empty($sponsor) ? $sponsor : 'Direct System',
+                        'package_name' => $selectedPkg['name'] ?? 'Package I',
+                        'status'       => 'active',
+                    ]);
+
+                    setFlash('success', "Welcome {$username}! A confirmation email has been sent to {$email}. Your account is active and placed into {$packageType} at Level {$nodePlaced['level']}.");
                     header('Location: /member/dashboard.php');
                     exit;
                 }
