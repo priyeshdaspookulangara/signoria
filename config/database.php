@@ -164,19 +164,19 @@ class Database {
             $defaultSettings = [
                 'usdt_conversion_rate' => '90.00',
                 'usdt_trc20_address'   => 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-                'usdt_bep20_address'   => '0x572790c26FC062C247D0e1797D646F20a093AE14',
+                'usdt_bep20_address'   => '0x38CC4cd0433e64dAC73Dca87DDedDac27d12bC59',
                 'usdt_trc20_qr_path'   => 'uploads/qr_codes/company_official_qr.png',
-                'usdt_bep20_qr_path'   => 'uploads/qr_codes/official_sample.png',
+                'usdt_bep20_qr_path'   => 'uploads/qr_codes/company_bep20_qr.png',
                 // Keep backward-compatible keys
-                'company_usdt_wallet'  => '0x572790c26FC062C247D0e1797D646F20a093AE14',
+                'company_usdt_wallet'  => '0x38CC4cd0433e64dAC73Dca87DDedDac27d12bC59',
                 'company_usdt_network' => 'BEP20',
-                'company_qr_code'      => 'uploads/qr_codes/official_sample.png'
+                'company_qr_code'      => 'uploads/qr_codes/company_bep20_qr.png'
             ];
 
             $setStmt = $pdo->prepare("
                 INSERT INTO `system_settings` (`setting_key`, `setting_value`)
                 VALUES (?, ?)
-                ON DUPLICATE KEY UPDATE `setting_value` = IF(`setting_value` IS NULL OR `setting_value` = '', VALUES(`setting_value`), `setting_value`)
+                ON DUPLICATE KEY UPDATE `setting_value` = VALUES(`setting_value`)
             ");
             foreach ($defaultSettings as $key => $val) {
                 $setStmt->execute([$key, $val]);

@@ -259,7 +259,10 @@ require_once __DIR__ . '/../includes/header.php';
                     <div class="flex items-center gap-4 text-xs">
                         <span class="text-slate-400">Position: <strong class="text-emerald-400 font-mono">#<?= (int)$treeP1['position_index'] ?></strong></span>
                         <span class="text-slate-400">Current Level: <strong class="text-white font-mono"><?= (int)$treeP1['level'] ?></strong> / 6</span>
-                        <span class="text-slate-400">Subtree Members: <strong class="text-emerald-400 font-mono"><?= (int)$treeP1['team_count'] ?></strong></span>
+                        <span class="text-slate-400">Subtree: <strong class="text-emerald-400 font-mono"><?= (int)$treeP1['team_count'] ?></strong></span>
+                        <a href="/member/genealogy.php?package=package_1" class="px-3 py-1.5 bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200 hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-1">
+                            <span>Open Full Genealogy</span> <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
                     </div>
                 <?php else: ?>
                     <form method="POST">
@@ -351,7 +354,10 @@ require_once __DIR__ . '/../includes/header.php';
                     <div class="flex items-center gap-4 text-xs">
                         <span class="text-slate-400">Position: <strong class="text-teal-400 font-mono">#<?= (int)$treeP2['position_index'] ?></strong></span>
                         <span class="text-slate-400">Current Level: <strong class="text-white font-mono"><?= (int)$treeP2['level'] ?></strong> / 7</span>
-                        <span class="text-slate-400">Subtree Members: <strong class="text-teal-400 font-mono"><?= (int)$treeP2['team_count'] ?></strong></span>
+                        <span class="text-slate-400">Subtree: <strong class="text-teal-400 font-mono"><?= (int)$treeP2['team_count'] ?></strong></span>
+                        <a href="/member/genealogy.php?package=package_2" class="px-3 py-1.5 bg-teal-600/30 hover:bg-teal-600 text-teal-200 hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-1">
+                            <span>Open Full Genealogy</span> <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
                     </div>
                 <?php else: ?>
                     <form method="POST">

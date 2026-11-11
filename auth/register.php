@@ -24,7 +24,7 @@ $conversionRate = (float)($settings['usdt_conversion_rate'] ?? 90.00);
 if ($conversionRate <= 0) $conversionRate = 90.00;
 
 $trc20Address = $settings['usdt_trc20_address'] ?? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-$bep20Address = $settings['usdt_bep20_address'] ?? ($settings['company_usdt_wallet'] ?? '0x572790c26FC062C247D0e1797D646F20a093AE14');
+$bep20Address = $settings['usdt_bep20_address'] ?? ($settings['company_usdt_wallet'] ?? '0x38CC4cd0433e64dAC73Dca87DDedDac27d12bC59');
 
 // Fetch active packages
 $packages = $pdo->query("SELECT * FROM packages WHERE status = 'active' ORDER BY inr_price ASC")->fetchAll();
@@ -179,7 +179,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     logActivity($newUserId, "User registered with USDT payment #{$pmtId} (TXID: {$txHash})");
 
-                    setFlash('success', "Registration submitted! Your payment of {$calcUsdt} USDT ({$network}) is pending administrator verification. Once approved, you will be placed into the BFS matrix.");
+                    // Send confirmation email to customer
+                    sendRegistrationConfirmationEmail([
+                        'email'        => $email,
+                        'username'     => $username,
+                        'sponsor'      => !empty($sponsor) ? $sponsor : 'Direct System',
+                        'package_name' => $selectedPkg['name'] ?? 'Package I',
+                        'status'       => 'pending',
+                        'tx_hash'      => $txHash,
+                    ]);
+
+                    setFlash('success', "Registration submitted! A confirmation email has been sent to {$email}. Your payment of {$calcUsdt} USDT ({$network}) is pending administrator verification. Once approved, you will be placed into the BFS matrix.");
                     header('Location: /auth/login.php');
                     exit;
 
@@ -213,7 +223,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     logActivity($newUserId, "User registered and placed into {$packageType} at Position #{$nodePlaced['position_index']}");
 
-                    setFlash('success', "Welcome {$username}! Your account is active and placed into {$packageType} at Level {$nodePlaced['level']}.");
+                    // Send confirmation email to customer
+                    sendRegistrationConfirmationEmail([
+                        'email'        => $email,
+                        'username'     => $username,
+                        'sponsor'      => !empty($sponsor) ? $sponsor : 'Direct System',
+                        'package_name' => $selectedPkg['name'] ?? 'Package I',
+                        'status'       => 'active',
+                    ]);
+
+                    setFlash('success', "Welcome {$username}! A confirmation email has been sent to {$email}. Your account is active and placed into {$packageType} at Level {$nodePlaced['level']}.");
                     header('Location: /member/dashboard.php');
                     exit;
                 }

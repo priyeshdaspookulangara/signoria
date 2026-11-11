@@ -307,7 +307,7 @@ class BfsMatrixEngine {
      * Retrieve visual tree structure for a user in a given package.
      * Returns the user's primary/active node and their direct downstream children (up to 3 levels deep).
      */
-    public static function getUserMatrixTree(PDO $pdo, int $userId, string $packageType): ?array {
+    public static function getUserMatrixTree(PDO $pdo, int $userId, string $packageType, int $maxDepth = 3): ?array {
         // Find user's earliest active node in this package
         $stmt = $pdo->prepare("
             SELECT m.*, u.username, u.email, u.usdt_wallet
@@ -327,10 +327,34 @@ class BfsMatrixEngine {
             return null;
         }
 
-        // Fetch direct 1st level children
-        $rootNode['children'] = self::getNodeChildren($pdo, (int)$rootNode['id'], 1, 2);
+        // Fetch direct children up to maxDepth levels deep
+        $rootNode['children'] = self::getNodeChildren($pdo, (int)$rootNode['id'], 1, $maxDepth);
 
         // Calculate total team size under this node
+        $rootNode['team_count'] = self::countDescendants($pdo, (int)$rootNode['id']);
+
+        return $rootNode;
+    }
+
+    /**
+     * Retrieve tree structure anchored at a specific matrix node ID (up to 3 levels deep).
+     */
+    public static function getNodeMatrixTree(PDO $pdo, int $nodeId, int $maxDepth = 3): ?array {
+        $stmt = $pdo->prepare("
+            SELECT m.*, u.username, u.email, u.usdt_wallet
+            FROM matrix_nodes m
+            JOIN users u ON m.user_id = u.id
+            WHERE m.id = :nid
+            LIMIT 1
+        ");
+        $stmt->execute([':nid' => $nodeId]);
+        $rootNode = $stmt->fetch();
+
+        if (!$rootNode) {
+            return null;
+        }
+
+        $rootNode['children'] = self::getNodeChildren($pdo, (int)$rootNode['id'], 1, $maxDepth);
         $rootNode['team_count'] = self::countDescendants($pdo, (int)$rootNode['id']);
 
         return $rootNode;
@@ -402,5 +426,100 @@ class BfsMatrixEngine {
             $stats[$pkg] = $stmt->fetch();
         }
         return $stats;
+    }
+
+    /**
+     * Retroactively recalculate all matrix payout commissions for placed members.
+     * Deletes previous 'matrix_payout' transactions and re-evaluates upline earnings
+     * for all placed matrix nodes in ascending order (chronological by node ID),
+     * applying the new 60% effective per-head payout schedule.
+     */
+    public static function recalculateAllMatrixPayouts(PDO $pdo): array {
+        $pdo->beginTransaction();
+        try {
+            // 1. Delete all existing matrix_payout transactions
+            $delStmt = $pdo->prepare("DELETE FROM transactions WHERE type = 'matrix_payout'");
+            $delStmt->execute();
+            $deletedCount = $delStmt->rowCount();
+
+            // 2. Fetch all placed matrix nodes in insertion order
+            $stmt = $pdo->query("SELECT * FROM matrix_nodes ORDER BY id ASC");
+            $nodes = $stmt->fetchAll();
+
+            $payoutCount = 0;
+            $totalDistributed = 0.0;
+
+            foreach ($nodes as $node) {
+                // If the node has a parent, distribute matrix rewards to its uplines
+                if ($node['parent_node_id'] !== null) {
+                    $config = self::getConfig($node['package_type']);
+                    $maxLevels = $config['max_levels'];
+                    $payoutRates = $config['effective_level_payouts'] ?? [];
+
+                    $uplines = [];
+                    $currentParentId = $node['parent_node_id'];
+                    $depthCount = 0;
+
+                    while ($currentParentId !== null && $depthCount < $maxLevels) {
+                        $pStmt = $pdo->prepare("
+                            SELECT id, user_id, parent_node_id, level, status
+                            FROM matrix_nodes
+                            WHERE id = :id
+                            LIMIT 1
+                        ");
+                        $pStmt->execute([':id' => $currentParentId]);
+                        $parentNode = $pStmt->fetch();
+
+                        if (!$parentNode) {
+                            break;
+                        }
+
+                        $uplines[] = $parentNode;
+                        $currentParentId = $parentNode['parent_node_id'];
+                        $depthCount++;
+                    }
+
+                    foreach ($uplines as $idx => $upline) {
+                        $relativeDepth = $idx + 1;
+                        $payoutAmount = (float)($payoutRates[$relativeDepth] ?? 0.0);
+
+                        if ($payoutAmount > 0) {
+                            $txStmt = $pdo->prepare("
+                                INSERT INTO transactions
+                                (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+                                VALUES
+                                (:uid, 'matrix_payout', :amt, NULL, 'completed', :details, :created)
+                            ");
+                            $createdAt = !empty($node['created_at']) ? $node['created_at'] : date('Y-m-d H:i:s');
+                            $txStmt->execute([
+                                ':uid'     => (int)$upline['user_id'],
+                                ':amt'     => $payoutAmount,
+                                ':details' => "Matrix Level {$relativeDepth} payout bonus from Node #{$node['id']} in {$node['package_type']}",
+                                ':created' => $createdAt,
+                            ]);
+
+                            $payoutCount++;
+                            $totalDistributed += $payoutAmount;
+                        }
+                    }
+                }
+            }
+
+            $pdo->commit();
+
+            return [
+                'success'           => true,
+                'deleted_previous'  => $deletedCount,
+                'nodes_evaluated'   => count($nodes),
+                'payouts_generated' => $payoutCount,
+                'total_distributed' => round($totalDistributed, 2),
+            ];
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            return [
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ];
+        }
     }
 }

@@ -26,7 +26,7 @@ if ($conversionRate <= 0) {
 }
 
 $trc20Address = $settings['usdt_trc20_address'] ?? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-$bep20Address = $settings['usdt_bep20_address'] ?? ($settings['company_usdt_wallet'] ?? '0x572790c26FC062C247D0e1797D646F20a093AE14');
+$bep20Address = $settings['usdt_bep20_address'] ?? ($settings['company_usdt_wallet'] ?? '0x38CC4cd0433e64dAC73Dca87DDedDac27d12bC59');
 
 // Fetch active packages
 $packages = $pdo->query("SELECT * FROM packages WHERE status = 'active' ORDER BY inr_price ASC")->fetchAll();

@@ -129,6 +129,10 @@ function csrfToken(): string {
     return $_SESSION['csrf_token'];
 }
 
+function generateCsrfToken(): string {
+    return csrfToken();
+}
+
 function csrfField(): string {
     $token = csrfToken();
     return '<input type="hidden" name="csrf_token" value="' . e($token) . '">';
@@ -207,15 +211,15 @@ function getSystemDepositWallet(): array {
         $stmt = $pdo->query("SELECT setting_key, setting_value FROM system_settings");
         $rows = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
         return [
-            'wallet_address' => $rows['company_usdt_wallet'] ?? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-            'network'        => $rows['company_usdt_network'] ?? 'TRC20',
-            'qr_code_path'   => $rows['company_qr_code'] ?? null,
+            'wallet_address' => $rows['company_usdt_wallet'] ?? '0x38CC4cd0433e64dAC73Dca87DDedDac27d12bC59',
+            'network'        => $rows['company_usdt_network'] ?? 'BEP20',
+            'qr_code_path'   => $rows['company_qr_code'] ?? 'uploads/qr_codes/company_bep20_qr.png',
         ];
     } catch (Exception $e) {
         return [
-            'wallet_address' => 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-            'network'        => 'TRC20',
-            'qr_code_path'   => null,
+            'wallet_address' => '0x38CC4cd0433e64dAC73Dca87DDedDac27d12bC59',
+            'network'        => 'BEP20',
+            'qr_code_path'   => 'uploads/qr_codes/company_bep20_qr.png',
         ];
     }
 }
@@ -235,4 +239,187 @@ function updateSystemDepositWallet(string $wallet, string $network, ?string $qrC
     if ($qrCodePath !== null) {
         $stmt->execute([':k' => 'company_qr_code', ':v' => $qrCodePath]);
     }
+}
+
+/**
+ * Send an email notification (HTML + text fallback)
+ */
+function sendEmailNotification(string $toEmail, string $subject, string $htmlBody, string $plainTextBody = ''): bool {
+    if (empty($plainTextBody)) {
+        $plainTextBody = strip_tags(str_replace(['<br>', '<br/>', '<br />', '</p>'], "\n", $htmlBody));
+    }
+
+    $boundary = '==Multipart_Boundary_x' . md5((string)time()) . 'x';
+
+    // Construct headers
+    $fromName = 'Zenith Assets';
+    $fromEmail = 'noreply@' . ($_SERVER['HTTP_HOST'] ?? 'zenithassets.com');
+    // Sanitize host if containing port
+    $hostParts = explode(':', $fromEmail);
+    $fromEmail = $hostParts[0];
+
+    $headers = [];
+    $headers[] = 'MIME-Version: 1.0';
+    $headers[] = "From: {$fromName} <{$fromEmail}>";
+    $headers[] = "Reply-To: {$fromEmail}";
+    $headers[] = 'X-Mailer: PHP/' . phpversion();
+    $headers[] = "Content-Type: multipart/alternative; boundary=\"{$boundary}\"";
+
+    $message = "--{$boundary}\r\n";
+    $message .= "Content-Type: text/plain; charset=\"UTF-8\"\r\n";
+    $message .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
+    $message .= $plainTextBody . "\r\n\r\n";
+
+    $message .= "--{$boundary}\r\n";
+    $message .= "Content-Type: text/html; charset=\"UTF-8\"\r\n";
+    $message .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
+    $message .= $htmlBody . "\r\n\r\n";
+
+    $message .= "--{$boundary}--";
+
+    // Attempt native mail delivery
+    $sent = false;
+    try {
+        $sent = @mail($toEmail, $subject, $message, implode("\r\n", $headers));
+    } catch (\Throwable $e) {
+        error_log("Failed to send email to {$toEmail}: " . $e->getMessage());
+        $sent = false;
+    }
+
+    return $sent;
+}
+
+/**
+ * Send registration confirmation email to customer
+ */
+function sendRegistrationConfirmationEmail(array $userParams): bool {
+    $email = trim($userParams['email'] ?? '');
+    $username = trim($userParams['username'] ?? '');
+    $sponsorName = trim($userParams['sponsor'] ?? 'Direct System');
+    $packageName = trim($userParams['package_name'] ?? 'Package I (50 USDT)');
+    $status = trim($userParams['status'] ?? 'active'); // 'active' or 'pending'
+    $txHash = trim($userParams['tx_hash'] ?? '');
+
+    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+
+    $siteUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $loginUrl = $siteUrl . '/auth/login.php';
+
+    $subject = "Welcome to Zenith Assets - Registration Confirmation";
+
+    $statusBadge = ($status === 'active')
+        ? '<span style="display:inline-block;padding:4px 12px;background-color:#10b981;color:#ffffff;border-radius:9999px;font-size:12px;font-weight:bold;text-transform:uppercase;">Active</span>'
+        : '<span style="display:inline-block;padding:4px 12px;background-color:#f59e0b;color:#ffffff;border-radius:9999px;font-size:12px;font-weight:bold;text-transform:uppercase;">Pending Verification</span>';
+
+    $statusMessage = ($status === 'active')
+        ? '<p style="color:#d1d5db;font-size:14px;line-height:1.6;margin:12px 0;">Your membership is <strong>active</strong> and you have been placed into the BFS matrix network.</p>'
+        : '<p style="color:#d1d5db;font-size:14px;line-height:1.6;margin:12px 0;">Your USDT payment proof has been submitted and is currently being verified by an administrator. Once approved, your account will be activated and placed into the BFS matrix.</p>';
+
+    $txRow = '';
+    if (!empty($txHash)) {
+        $txRow = '
+        <tr>
+            <td style="padding:10px 0;border-bottom:1px solid #2d3748;color:#9ca3af;font-size:14px;">Transaction TXID:</td>
+            <td style="padding:10px 0;border-bottom:1px solid #2d3748;color:#e2e8f0;font-size:13px;font-family:monospace;word-break:break-all;text-align:right;">' . htmlspecialchars($txHash) . '</td>
+        </tr>';
+    }
+
+    $htmlBody = '
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Welcome to Zenith Assets</title>
+    </head>
+    <body style="margin:0;padding:0;background-color:#0b0f19;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;color:#e2e8f0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0b0f19;padding:40px 15px;">
+            <tr>
+                <td align="center">
+                    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#161d31;border:1px solid #283046;border-radius:12px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+                        <!-- Header -->
+                        <tr>
+                            <td style="padding:32px 32px 24px;text-align:center;background:linear-gradient(135deg,#1e1b4b 0%,#0f172a 100%);border-bottom:1px solid #283046;">
+                                <h1 style="margin:0 0 8px 0;font-size:26px;color:#ffffff;letter-spacing:0.5px;">ZENITH ASSETS</h1>
+                                <p style="margin:0;font-size:14px;color:#93c5fd;letter-spacing:1px;text-transform:uppercase;font-weight:600;">Autonomous Matrix Financial Network</p>
+                            </td>
+                        </tr>
+                        <!-- Body Content -->
+                        <tr>
+                            <td style="padding:32px;">
+                                <h2 style="margin:0 0 16px;font-size:20px;color:#ffffff;">Registration Confirmation</h2>
+                                <p style="margin:0 0 16px;color:#cbd5e1;font-size:15px;line-height:1.6;">
+                                    Hello <strong style="color:#60a5fa;">' . htmlspecialchars($username) . '</strong>,
+                                </p>
+                                <p style="margin:0 0 20px;color:#cbd5e1;font-size:15px;line-height:1.6;">
+                                    Thank you for registering with Zenith Assets. Your customer registration has been successfully received.
+                                </p>
+                                ' . $statusMessage . '
+                                <!-- Account Details Card -->
+                                <table width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;background-color:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:16px 20px;">
+                                    <tr>
+                                        <td style="padding:10px 0;border-bottom:1px solid #1e293b;color:#94a3b8;font-size:14px;">Username:</td>
+                                        <td style="padding:10px 0;border-bottom:1px solid #1e293b;color:#ffffff;font-size:14px;font-weight:600;text-align:right;">' . htmlspecialchars($username) . '</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px 0;border-bottom:1px solid #1e293b;color:#94a3b8;font-size:14px;">Email Address:</td>
+                                        <td style="padding:10px 0;border-bottom:1px solid #1e293b;color:#ffffff;font-size:14px;text-align:right;">' . htmlspecialchars($email) . '</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px 0;border-bottom:1px solid #1e293b;color:#94a3b8;font-size:14px;">Sponsor:</td>
+                                        <td style="padding:10px 0;border-bottom:1px solid #1e293b;color:#ffffff;font-size:14px;text-align:right;">' . htmlspecialchars($sponsorName) . '</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:10px 0;border-bottom:1px solid #1e293b;color:#94a3b8;font-size:14px;">Selected Package:</td>
+                                        <td style="padding:10px 0;border-bottom:1px solid #1e293b;color:#38bdf8;font-size:14px;font-weight:600;text-align:right;">' . htmlspecialchars($packageName) . '</td>
+                                    </tr>
+                                    ' . $txRow . '
+                                    <tr>
+                                        <td style="padding:10px 0;color:#94a3b8;font-size:14px;">Account Status:</td>
+                                        <td style="padding:10px 0;text-align:right;">' . $statusBadge . '</td>
+                                    </tr>
+                                </table>
+
+                                <!-- CTA Button -->
+                                <table width="100%" cellpadding="0" cellspacing="0" style="margin:30px 0 10px;">
+                                    <tr>
+                                        <td align="center">
+                                            <a href="' . htmlspecialchars($loginUrl) . '" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%);color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;box-shadow:0 4px 12px rgba(37,99,235,0.4);">Access Your Account</a>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <!-- Footer -->
+                        <tr>
+                            <td style="padding:20px 32px;background-color:#0f172a;border-top:1px solid #283046;text-align:center;">
+                                <p style="margin:0 0 6px 0;font-size:12px;color:#64748b;">
+                                    &copy; ' . date('Y') . ' Zenith Assets. All rights reserved.
+                                </p>
+                                <p style="margin:0;font-size:11px;color:#475569;">
+                                    If you did not register for this account, please disregard this email.
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>';
+
+    $plainText = "Welcome to Zenith Assets!\n\n"
+        . "Hello {$username},\n\n"
+        . "Thank you for registering with Zenith Assets. Your registration details are as follows:\n\n"
+        . "Username: {$username}\n"
+        . "Email: {$email}\n"
+        . "Sponsor: {$sponsorName}\n"
+        . "Package: {$packageName}\n"
+        . (!empty($txHash) ? "TXID: {$txHash}\n" : "")
+        . "Status: " . ucfirst($status) . "\n\n"
+        . "You can log in to your account at: {$loginUrl}\n\n"
+        . "Best regards,\nZenith Assets Team";
+
+    return sendEmailNotification($email, $subject, $htmlBody, $plainText);
 }

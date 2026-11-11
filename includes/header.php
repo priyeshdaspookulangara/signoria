@@ -119,7 +119,12 @@ $currentPath = $_SERVER['SCRIPT_NAME'] ?? '';
                     </div>
 
                     <a href="/member/dashboard.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'member/dashboard.php') ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
-                        <i class="fa-solid fa-sitemap w-5 text-center mr-2.5 <?= str_contains($currentPath, 'member/dashboard.php') ? 'text-white' : 'text-teal-400' ?>"></i>
+                        <i class="fa-solid fa-gauge-high w-5 text-center mr-2.5 <?= str_contains($currentPath, 'member/dashboard.php') ? 'text-white' : 'text-emerald-400' ?>"></i>
+                        Dashboard
+                    </a>
+
+                    <a href="/member/genealogy.php" class="flex items-center px-3 py-2.5 text-xs font-semibold rounded-xl transition <?= str_contains($currentPath, 'member/genealogy.php') ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30' : 'text-slate-300 hover:text-white hover:bg-slate-800' ?>">
+                        <i class="fa-solid fa-sitemap w-5 text-center mr-2.5 <?= str_contains($currentPath, 'member/genealogy.php') ? 'text-white' : 'text-teal-400' ?>"></i>
                         Matrix Visualizer
                     </a>
 
