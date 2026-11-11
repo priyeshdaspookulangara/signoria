@@ -17,10 +17,30 @@ $adminUser = getCurrentUser();
 $error = null;
 $success = null;
 
-// Handle Transaction Approvals / Rejections
+// Handle Transaction Approvals / Rejections & Recalculation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
-    $txId = (int)($_POST['tx_id'] ?? 0);
     $action = $_POST['action'];
+
+    if ($action === 'recalculate_matrix_commissions') {
+        if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+            setFlash('danger', 'Invalid security token.');
+            header('Location: /admin/transactions.php');
+            exit;
+        }
+
+        $res = BfsMatrixEngine::recalculateAllMatrixPayouts($pdo);
+        if ($res['success']) {
+            logActivity((int)$adminUser['id'], "Admin retroactively recalculated matrix payouts: {$res['payouts_generated']} transactions generated ({$res['total_distributed']} USDT across {$res['nodes_evaluated']} nodes).");
+            setFlash('success', "Matrix commissions successfully recalculated! Replaced {$res['deleted_previous']} old records with {$res['payouts_generated']} updated commission payouts totaling {$res['total_distributed']} USDT across {$res['nodes_evaluated']} placed nodes.");
+        } else {
+            setFlash('danger', 'Failed to recalculate matrix commissions: ' . ($res['error'] ?? 'Unknown error'));
+        }
+
+        header('Location: /admin/transactions.php');
+        exit;
+    }
+
+    $txId = (int)($_POST['tx_id'] ?? 0);
 
     $stmt = $pdo->prepare("SELECT * FROM transactions WHERE id = :id LIMIT 1");
     $stmt->execute([':id' => $txId]);
@@ -144,6 +164,20 @@ require_once __DIR__ . '/../includes/header.php';
             <p class="text-xs text-slate-400 mt-1">Review incoming deposits proof and settle member withdrawal requests.</p>
         </div>
 
+        <div class="flex items-center gap-2">
+            <!-- Recalculate Commissions Tool -->
+            <form method="POST" action="/admin/transactions.php" onsubmit="return confirm('⚠️ Recalculate all matrix commissions?\n\nThis will recompute matrix payouts for all placed members using the 60% effective commission rates and update transaction histories and wallet balances. Existing user placements and tree positions will remain unchanged.');">
+                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                <input type="hidden" name="action" value="recalculate_matrix_commissions">
+                <button type="submit" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-amber-500/20 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-calculator"></i>
+                    <span>Recalculate Matrix Commissions</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <!-- Filters Form -->
         <form method="GET" action="/admin/transactions.php" class="flex flex-wrap items-center gap-2 text-xs">
             <select name="type" class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white focus:outline-none">
