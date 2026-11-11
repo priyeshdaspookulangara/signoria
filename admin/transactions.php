@@ -167,7 +167,7 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="flex items-center gap-2">
             <!-- Recalculate Commissions Tool -->
             <form method="POST" action="/admin/transactions.php" onsubmit="return confirm('⚠️ Recalculate all matrix commissions?\n\nThis will recompute matrix payouts for all placed members using the 60% effective commission rates and update transaction histories and wallet balances. Existing user placements and tree positions will remain unchanged.');">
-                <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
+                <?= csrfField() ?>
                 <input type="hidden" name="action" value="recalculate_matrix_commissions">
                 <button type="submit" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-slate-950 font-black rounded-xl text-xs shadow-lg shadow-amber-500/20 transition flex items-center gap-1.5">
                     <i class="fa-solid fa-calculator"></i>

@@ -129,6 +129,10 @@ function csrfToken(): string {
     return $_SESSION['csrf_token'];
 }
 
+function generateCsrfToken(): string {
+    return csrfToken();
+}
+
 function csrfField(): string {
     $token = csrfToken();
     return '<input type="hidden" name="csrf_token" value="' . e($token) . '">';
