@@ -89,9 +89,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $settings = $pdo->query("SELECT setting_key, setting_value FROM system_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
 $rate       = (float)($settings['usdt_conversion_rate'] ?? 90.00);
 $trc20Addr  = $settings['usdt_trc20_address'] ?? 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-$bep20Addr  = $settings['usdt_bep20_address'] ?? ($settings['company_usdt_wallet'] ?? '0x572790c26FC062C247D0e1797D646F20a093AE14');
+$bep20Addr  = $settings['usdt_bep20_address'] ?? ($settings['company_usdt_wallet'] ?? '0x38CC4cd0433e64dAC73Dca87DDedDac27d12bC59');
 $trc20Qr    = $settings['usdt_trc20_qr_path'] ?? 'uploads/qr_codes/company_official_qr.png';
-$bep20Qr    = $settings['usdt_bep20_qr_path'] ?? ($settings['company_qr_code'] ?? 'uploads/qr_codes/official_sample.png');
+$bep20Qr    = $settings['usdt_bep20_qr_path'] ?? ($settings['company_qr_code'] ?? 'uploads/qr_codes/company_bep20_qr.png');
 
 $pageTitle = 'Corporate USDT Gateway Settings';
 require_once __DIR__ . '/../includes/header.php';
@@ -174,7 +174,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <input type="text" id="usdt_bep20_address" name="usdt_bep20_address" required
                         value="<?= e($bep20Addr) ?>"
                         class="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        placeholder="0x572790c26FC062C247D0e1797D646F20a093AE14">
+                        placeholder="0x38CC4cd0433e64dAC73Dca87DDedDac27d12bC59">
                 </div>
 
                 <div>
