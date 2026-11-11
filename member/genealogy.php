@@ -76,7 +76,7 @@ $pageTitle = 'Matrix Genealogy Tree';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+<div class="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
     <!-- Header with Package Switcher & Reset -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between pb-6 border-b border-slate-800 gap-4">
         <div>
@@ -190,9 +190,9 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
         <!-- 3-Level Visual Matrix Tree Board Matching User UI -->
-        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 shadow-2xl">
-            <div class="overflow-x-auto pb-12 custom-scroll">
-                <div class="min-w-[960px] flex flex-col items-center select-none">
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 sm:p-12 shadow-2xl min-h-[750px]">
+            <div class="overflow-x-auto pb-36 pt-4 custom-scroll">
+                <div class="min-w-[1100px] flex flex-col items-center select-none">
 
                     <!-- ================= Level 1: Root Head Card ================= -->
                     <div class="flex flex-col items-center">
