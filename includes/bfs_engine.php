@@ -24,7 +24,16 @@ class BfsMatrixEngine {
             'entry_amount'   => 50.00,
             'rebirth_fee'    => 10.00,
             'rebirth_levels' => [4, 5, 6],
-            'distribution_pct' => 0.60, // 60% of entry amount distributed to active uplines
+            'distribution_pct' => 0.60,
+            // Effective commission per head (60% of potential base rate [1.5, 2, 4, 6, 8, 10])
+            'effective_level_payouts' => [
+                1 => 0.90,  // Level 1: 3 * 0.90 = 2.70 USDT
+                2 => 1.20,  // Level 2: 9 * 1.20 = 10.80 USDT
+                3 => 2.40,  // Level 3: 27 * 2.40 = 64.80 USDT
+                4 => 3.60,  // Level 4: 81 * 3.60 = 291.60 USDT
+                5 => 4.80,  // Level 5: 243 * 4.80 = 1,166.40 USDT
+                6 => 6.00,  // Level 6: 729 * 6.00 = 4,374.00 USDT
+            ],
         ],
         'package_2' => [
             'name'           => 'Package II (Deep 7-Depth Parallel Pool)',
@@ -32,7 +41,17 @@ class BfsMatrixEngine {
             'entry_amount'   => 300.00,
             'rebirth_fee'    => 50.00,
             'rebirth_levels' => [4, 5, 6, 7],
-            'distribution_pct' => 0.60, // 60% of entry amount distributed to active uplines
+            'distribution_pct' => 0.60,
+            // Effective commission per head (60% of potential base rate [10, 20, 30, 40, 50, 60, 70])
+            'effective_level_payouts' => [
+                1 => 6.00,   // Level 1: 3 * 6.00 = 18.00 USDT
+                2 => 12.00,  // Level 2: 9 * 12.00 = 108.00 USDT
+                3 => 18.00,  // Level 3: 27 * 18.00 = 486.00 USDT
+                4 => 24.00,  // Level 4: 81 * 24.00 = 1,944.00 USDT
+                5 => 30.00,  // Level 5: 243 * 30.00 = 7,290.00 USDT
+                6 => 36.00,  // Level 6: 729 * 36.00 = 26,244.00 USDT
+                7 => 42.00,  // Level 7: 2187 * 42.00 = 91,854.00 USDT
+            ],
         ],
     ];
 
@@ -171,13 +190,14 @@ class BfsMatrixEngine {
     }
 
     /**
-     * Distribute 60% entry volume to direct and indirect uplines in the matrix tree.
-     * The 60% is shared across active uplines up to max pool depth (6 for P1, 7 for P2).
+     * Distribute matrix rewards to direct and indirect uplines in the matrix tree.
+     * Each qualified upline at relative depth receives their exact Effective Commission per Head
+     * (60% of potential total earnings per downline node as published in the business plan).
      */
     public static function distributeMatrixRewards(PDO $pdo, array $node): void {
         $config = self::getConfig($node['package_type']);
-        $totalPoolReward = $config['entry_amount'] * $config['distribution_pct']; // e.g. 100 * 0.60 = 60 USDT
         $maxLevels = $config['max_levels'];
+        $payoutRates = $config['effective_level_payouts'] ?? [];
 
         // Traverse up the tree to collect upline parent nodes
         $uplines = [];
@@ -208,28 +228,10 @@ class BfsMatrixEngine {
             return;
         }
 
-        // Weighted tiered distribution across uplines:
-        // Direct parent gets 40% of the reward pool, Level 2 upline gets 25%, Level 3 gets 15%, remainder divided evenly among higher depths.
-        // Or if fewer uplines exist, distribute proportionally.
-        $weights = [0.40, 0.25, 0.15, 0.10, 0.05, 0.03, 0.02];
-        $totalWeightsUsed = 0.0;
-        $payoutList = [];
-
         foreach ($uplines as $idx => $upline) {
-            $w = $weights[$idx] ?? 0.02;
-            $payoutList[] = [
-                'user_id' => (int)$upline['user_id'],
-                'node_id' => (int)$upline['id'],
-                'depth'   => $idx + 1,
-                'weight'  => $w,
-            ];
-            $totalWeightsUsed += $w;
-        }
-
-        foreach ($payoutList as $item) {
-            // Normalize weight so 100% of the 60% reward pool is distributed to available uplines
-            $normalizedPct = $item['weight'] / $totalWeightsUsed;
-            $payoutAmount = round($totalPoolReward * $normalizedPct, 2);
+            $relativeDepth = $idx + 1;
+            // Get the effective commission per head for this downline depth
+            $payoutAmount = (float)($payoutRates[$relativeDepth] ?? 0.0);
 
             if ($payoutAmount > 0) {
                 $txStmt = $pdo->prepare("
@@ -239,9 +241,9 @@ class BfsMatrixEngine {
                     (:uid, 'matrix_payout', :amt, NULL, 'completed', :details, NOW())
                 ");
                 $txStmt->execute([
-                    ':uid'     => $item['user_id'],
+                    ':uid'     => (int)$upline['user_id'],
                     ':amt'     => $payoutAmount,
-                    ':details' => "Matrix Level {$item['depth']} payout bonus from Node #{$node['id']} in {$node['package_type']}",
+                    ':details' => "Matrix Level {$relativeDepth} payout bonus from Node #{$node['id']} in {$node['package_type']}",
                 ]);
             }
         }
