@@ -64,11 +64,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     exit;
 }
 
-// 2. Handle Edit Member Action
+// 2. Handle Change/Add Sponsor Action
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'change_sponsor') {
+    $targetUserId = (int)($_POST['target_user_id'] ?? 0);
+    $sponsorInput = trim($_POST['sponsor_input'] ?? ''); // can be sponsor user ID or username
+    $referralBonusPct = floatval($_POST['referral_bonus_pct'] ?? 10.0) / 100.0;
+    if ($referralBonusPct < 0) $referralBonusPct = 0.10;
+
+    $newSponsorId = null;
+    if ($sponsorInput !== '' && $sponsorInput !== '0' && strtolower($sponsorInput) !== 'none') {
+        if (ctype_digit($sponsorInput)) {
+            $newSponsorId = (int)$sponsorInput;
+        } else {
+            $sStmt = $pdo->prepare("SELECT id FROM users WHERE username = :u LIMIT 1");
+            $sStmt->execute([':u' => $sponsorInput]);
+            $foundId = $sStmt->fetchColumn();
+            if (!$foundId) {
+                setFlash('danger', "Sponsor username '{$sponsorInput}' not found.");
+                header('Location: /admin/users.php');
+                exit;
+            }
+            $newSponsorId = (int)$foundId;
+        }
+    }
+
+    try {
+        $result = BfsMatrixEngine::changeMemberSponsor(
+            $pdo,
+            $targetUserId,
+            $newSponsorId,
+            (int)$adminUser['id'],
+            $referralBonusPct
+        );
+
+        $sponsorLabel = $result['new_sponsor_username']
+            ? "@{$result['new_sponsor_username']} (UID #{$result['new_sponsor_id']})"
+            : 'None (System Root)';
+
+        $msg = "Sponsor for @{$result['target_username']} successfully updated to {$sponsorLabel}. ";
+        $msg .= "Cleared {$result['cleared_commissions_count']} previous commission records; generated {$result['new_commissions_count']} new commission calculation records (" . formatUsdt($result['new_commissions_usdt']) . " USDT).";
+
+        setFlash('success', $msg);
+    } catch (Exception $e) {
+        error_log("Failed to change sponsor: " . $e->getMessage());
+        setFlash('danger', "Failed to change sponsor: " . $e->getMessage());
+    }
+
+    header('Location: /admin/users.php');
+    exit;
+}
+
+// 3. Handle Edit Member Action
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_user') {
     $targetUserId = (int)($_POST['target_user_id'] ?? 0);
     $username = trim($_POST['username'] ?? '');
     $email = trim($_POST['email'] ?? '');
+    $sponsorInput = trim($_POST['sponsor_input'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $gender = trim($_POST['gender'] ?? '');
     $dob = trim($_POST['dob'] ?? '');
@@ -93,75 +144,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         setFlash('danger', 'Invalid role selected.');
     } else {
         // Check uniqueness of username among other accounts (email does not need to be unique)
-        $uStmt = $pdo->prepare("SELECT id FROM users WHERE username = :u AND id != :id LIMIT 1");
+        $uStmt = $pdo->prepare("SELECT id, sponsor_id FROM users WHERE username = :u AND id != :id LIMIT 1");
         $uStmt->execute([':u' => $username, ':id' => $targetUserId]);
         if ($uStmt->fetch()) {
             setFlash('danger', 'Username is already taken by another account.');
         } else {
-            try {
-                $validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
-                $genderVal = in_array($gender, $validGenders, true) ? $gender : null;
-                $dobVal = !empty($dob) ? $dob : null;
+            // Check current user details to see if sponsor changed
+            $curStmt = $pdo->prepare("SELECT sponsor_id FROM users WHERE id = :id LIMIT 1");
+            $curStmt->execute([':id' => $targetUserId]);
+            $currentSponsorId = $curStmt->fetchColumn();
+            $currentSponsorId = ($currentSponsorId !== false && $currentSponsorId !== null) ? (int)$currentSponsorId : null;
 
-                if (!empty($newPassword) && strlen($newPassword) >= 6) {
-                    $hash = password_hash($newPassword, PASSWORD_BCRYPT);
-                    $upStmt = $pdo->prepare("
-                        UPDATE users
-                        SET username = :u, email = :e, phone = :phone, gender = :gender, dob = :dob,
-                            address = :address, city = :city, district = :district, state_province = :state, country = :country,
-                            usdt_wallet = :w, usdt_network = :net, status = :s, role = :r, password = :p
-                        WHERE id = :id
-                    ");
-                    $upStmt->execute([
-                        ':u'       => $username,
-                        ':e'       => $email,
-                        ':phone'   => !empty($phone) ? $phone : null,
-                        ':gender'  => $genderVal,
-                        ':dob'     => $dobVal,
-                        ':address' => !empty($address) ? $address : null,
-                        ':city'    => !empty($city) ? $city : null,
-                        ':district'=> !empty($district) ? $district : null,
-                        ':state'   => !empty($stateProvince) ? $stateProvince : null,
-                        ':country' => !empty($country) ? $country : null,
-                        ':w'       => !empty($usdtWallet) ? $usdtWallet : null,
-                        ':net'     => !empty($usdtNetwork) ? $usdtNetwork : 'TRC20',
-                        ':s'       => $status,
-                        ':r'       => $role,
-                        ':p'       => $hash,
-                        ':id'      => $targetUserId,
-                    ]);
+            $newSponsorId = null;
+            $sponsorError = null;
+            if ($sponsorInput !== '' && $sponsorInput !== '0' && strtolower($sponsorInput) !== 'none') {
+                if (ctype_digit($sponsorInput)) {
+                    $newSponsorId = (int)$sponsorInput;
                 } else {
-                    $upStmt = $pdo->prepare("
-                        UPDATE users
-                        SET username = :u, email = :e, phone = :phone, gender = :gender, dob = :dob,
-                            address = :address, city = :city, district = :district, state_province = :state, country = :country,
-                            usdt_wallet = :w, usdt_network = :net, status = :s, role = :r
-                        WHERE id = :id
-                    ");
-                    $upStmt->execute([
-                        ':u'       => $username,
-                        ':e'       => $email,
-                        ':phone'   => !empty($phone) ? $phone : null,
-                        ':gender'  => $genderVal,
-                        ':dob'     => $dobVal,
-                        ':address' => !empty($address) ? $address : null,
-                        ':city'    => !empty($city) ? $city : null,
-                        ':district'=> !empty($district) ? $district : null,
-                        ':state'   => !empty($stateProvince) ? $stateProvince : null,
-                        ':country' => !empty($country) ? $country : null,
-                        ':w'       => !empty($usdtWallet) ? $usdtWallet : null,
-                        ':net'     => !empty($usdtNetwork) ? $usdtNetwork : 'TRC20',
-                        ':s'       => $status,
-                        ':r'       => $role,
-                        ':id'      => $targetUserId,
-                    ]);
+                    $spStmt = $pdo->prepare("SELECT id FROM users WHERE username = :u LIMIT 1");
+                    $spStmt->execute([':u' => $sponsorInput]);
+                    $foundId = $spStmt->fetchColumn();
+                    if (!$foundId) {
+                        $sponsorError = "Sponsor username '{$sponsorInput}' not found.";
+                    } else {
+                        $newSponsorId = (int)$foundId;
+                    }
                 }
+            }
 
-                logActivity((int)$adminUser['id'], "Admin updated details for user '{$username}' (#{$targetUserId}).");
-                setFlash('success', "User #{$targetUserId} ('{$username}') updated successfully.");
-            } catch (Exception $e) {
-                error_log("Failed to edit user: " . $e->getMessage());
-                setFlash('danger', "Failed to update user: " . $e->getMessage());
+            if ($sponsorError) {
+                setFlash('danger', $sponsorError);
+            } else {
+                try {
+                    $validGenders = ['male', 'female', 'other', 'prefer_not_to_say'];
+                    $genderVal = in_array($gender, $validGenders, true) ? $gender : null;
+                    $dobVal = !empty($dob) ? $dob : null;
+
+                    if (!empty($newPassword) && strlen($newPassword) >= 6) {
+                        $hash = password_hash($newPassword, PASSWORD_BCRYPT);
+                        $upStmt = $pdo->prepare("
+                            UPDATE users
+                            SET username = :u, email = :e, phone = :phone, gender = :gender, dob = :dob,
+                                address = :address, city = :city, district = :district, state_province = :state, country = :country,
+                                usdt_wallet = :w, usdt_network = :net, status = :s, role = :r, password = :p
+                            WHERE id = :id
+                        ");
+                        $upStmt->execute([
+                            ':u'       => $username,
+                            ':e'       => $email,
+                            ':phone'   => !empty($phone) ? $phone : null,
+                            ':gender'  => $genderVal,
+                            ':dob'     => $dobVal,
+                            ':address' => !empty($address) ? $address : null,
+                            ':city'    => !empty($city) ? $city : null,
+                            ':district'=> !empty($district) ? $district : null,
+                            ':state'   => !empty($stateProvince) ? $stateProvince : null,
+                            ':country' => !empty($country) ? $country : null,
+                            ':w'       => !empty($usdtWallet) ? $usdtWallet : null,
+                            ':net'     => !empty($usdtNetwork) ? $usdtNetwork : 'TRC20',
+                            ':s'       => $status,
+                            ':r'       => $role,
+                            ':p'       => $hash,
+                            ':id'      => $targetUserId,
+                        ]);
+                    } else {
+                        $upStmt = $pdo->prepare("
+                            UPDATE users
+                            SET username = :u, email = :e, phone = :phone, gender = :gender, dob = :dob,
+                                address = :address, city = :city, district = :district, state_province = :state, country = :country,
+                                usdt_wallet = :w, usdt_network = :net, status = :s, role = :r
+                            WHERE id = :id
+                        ");
+                        $upStmt->execute([
+                            ':u'       => $username,
+                            ':e'       => $email,
+                            ':phone'   => !empty($phone) ? $phone : null,
+                            ':gender'  => $genderVal,
+                            ':dob'     => $dobVal,
+                            ':address' => !empty($address) ? $address : null,
+                            ':city'    => !empty($city) ? $city : null,
+                            ':district'=> !empty($district) ? $district : null,
+                            ':state'   => !empty($stateProvince) ? $stateProvince : null,
+                            ':country' => !empty($country) ? $country : null,
+                            ':w'       => !empty($usdtWallet) ? $usdtWallet : null,
+                            ':net'     => !empty($usdtNetwork) ? $usdtNetwork : 'TRC20',
+                            ':s'       => $status,
+                            ':r'       => $role,
+                            ':id'      => $targetUserId,
+                        ]);
+                    }
+
+                    logActivity((int)$adminUser['id'], "Admin updated details for user '{$username}' (#{$targetUserId}).");
+
+                    $sponsorMsg = "";
+                    // If sponsor changed, clear existing commissions and recalculate/generate new ones
+                    if ($newSponsorId !== $currentSponsorId) {
+                        $spResult = BfsMatrixEngine::changeMemberSponsor(
+                            $pdo,
+                            $targetUserId,
+                            $newSponsorId,
+                            (int)$adminUser['id']
+                        );
+                        $sponsorMsg = " Sponsor updated; cleared {$spResult['cleared_commissions_count']} previous commission records and created {$spResult['new_commissions_count']} new commission calculations.";
+                    }
+
+                    setFlash('success', "User #{$targetUserId} ('{$username}') updated successfully.{$sponsorMsg}");
+                } catch (Exception $e) {
+                    error_log("Failed to edit user: " . $e->getMessage());
+                    setFlash('danger', "Failed to update user: " . $e->getMessage());
+                }
             }
         }
     }
@@ -280,7 +371,15 @@ require_once __DIR__ . '/../includes/header.php';
                                     </span>
                                 </td>
                                 <td class="py-3 px-3 text-slate-300 font-medium">
-                                    <?= e($u['sponsor_name'] ?? 'None (Root)') ?>
+                                    <div class="flex items-center gap-1.5">
+                                        <span><?= e($u['sponsor_name'] ?? 'None (Root)') ?></span>
+                                        <button type="button"
+                                            onclick='openSponsorModal(<?= (int)$u['id'] ?>, <?= json_encode($u['username']) ?>, <?= (int)($u['sponsor_id'] ?? 0) ?>, <?= json_encode($u['sponsor_name'] ?? '') ?>)'
+                                            class="text-purple-400 hover:text-purple-300 p-1 transition"
+                                            title="Change or Add Sponsor">
+                                            <i class="fa-solid fa-user-gear text-xs"></i>
+                                        </button>
+                                    </div>
                                 </td>
                                 <td class="py-3 px-3 font-mono font-bold text-emerald-400">
                                     <?= formatUsdt(getUserUsdtBalance((int)$u['id'])) ?> USDT
@@ -309,6 +408,13 @@ require_once __DIR__ . '/../includes/header.php';
                                 </td>
                                 <td class="py-3 px-3 text-right">
                                     <div class="flex items-center justify-end gap-2">
+                                        <!-- Change Sponsor Button -->
+                                        <button type="button"
+                                            onclick='openSponsorModal(<?= (int)$u['id'] ?>, <?= json_encode($u['username']) ?>, <?= (int)($u['sponsor_id'] ?? 0) ?>, <?= json_encode($u['sponsor_name'] ?? '') ?>)'
+                                            class="px-2.5 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 rounded-lg text-[11px] font-semibold transition flex items-center gap-1">
+                                            <i class="fa-solid fa-user-plus"></i> Sponsor
+                                        </button>
+
                                         <!-- Edit Button (Opens Modal) -->
                                         <button type="button"
                                             onclick='openEditModal(<?= json_encode($u, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>)'
@@ -335,6 +441,85 @@ require_once __DIR__ . '/../includes/header.php';
                 </tbody>
             </table>
         </div>
+    </div>
+</div>
+
+<!-- Change / Add Sponsor Dedicated Modal -->
+<div id="sponsorModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-user-gear text-purple-400"></i> Change or Add Sponsor
+            </h3>
+            <button type="button" onclick="closeSponsorModal()" class="text-slate-400 hover:text-white p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="/admin/users.php" class="mt-5 space-y-4">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="change_sponsor">
+            <input type="hidden" name="target_user_id" id="sponsorTargetUserId">
+
+            <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs space-y-1">
+                <div class="text-slate-400">Target Member: <strong class="text-white font-mono" id="sponsorTargetUsername"></strong></div>
+                <div class="text-slate-400">Current Sponsor: <strong class="text-purple-300 font-mono" id="sponsorCurrentName"></strong></div>
+            </div>
+
+            <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-300 flex items-start gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-amber-400 shrink-0 mt-0.5"></i>
+                <div>
+                    <strong>Important Calculation Notice:</strong> Changing or adding a sponsor will immediately clear existing sponsor referral commissions associated with this member and generate new commission calculation data for the new sponsor.
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="sponsorSelect">
+                    Select New Sponsor
+                </label>
+                <select id="sponsorSelect" onchange="syncSponsorSelection()"
+                    class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <option value="">-- Select from existing members --</option>
+                    <option value="none">None (System Root)</option>
+                    <?php foreach ($usersList as $optUser): ?>
+                        <option value="<?= (int)$optUser['id'] ?>" data-username="<?= e($optUser['username']) ?>">
+                            <?= e($optUser['username']) ?> (#<?= (int)$optUser['id'] ?> - <?= e($optUser['role']) ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="sponsorInput">
+                    Or Enter Sponsor Username / User ID
+                </label>
+                <input type="text" id="sponsorInput" name="sponsor_input"
+                    placeholder="Enter sponsor username (e.g. admin) or ID, or 'none'"
+                    class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <span class="text-[10px] text-slate-500 mt-1 block">Leave blank or type 'none' to remove sponsor (set as System Root).</span>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="referralBonusPct">
+                    Direct Sponsor Referral Bonus %
+                </label>
+                <div class="relative">
+                    <input type="number" id="referralBonusPct" name="referral_bonus_pct" value="10" min="0" max="100" step="1"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 pr-8">
+                    <span class="absolute right-3 top-2 text-slate-400 font-bold text-xs">%</span>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1 block">Standard rate is 10% of package entry price.</span>
+            </div>
+
+            <div class="pt-3 flex items-center justify-end gap-3 border-t border-slate-800">
+                <button type="button" onclick="closeSponsorModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">
+                    Cancel
+                </button>
+                <button type="submit" class="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrows-rotate"></i> Update Sponsor & Recalculate
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -366,6 +551,16 @@ require_once __DIR__ . '/../includes/header.php';
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editEmail">Email Address</label>
                     <input type="email" id="editEmail" name="email" required
                         class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1" for="editSponsorInput">
+                        Sponsor Username or ID
+                    </label>
+                    <input type="text" id="editSponsorInput" name="sponsor_input"
+                        placeholder="e.g. admin or 1 (leave blank for root)"
+                        class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <span class="text-[10px] text-slate-500 mt-0.5 block">Changing sponsor recalculates referral commissions automatically.</span>
                 </div>
 
                 <div>
@@ -488,10 +683,55 @@ require_once __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
+    function openSponsorModal(userId, username, sponsorId, sponsorName) {
+        document.getElementById('sponsorTargetUserId').value = userId;
+        document.getElementById('sponsorTargetUsername').textContent = '@' + username + ' (#' + userId + ')';
+        document.getElementById('sponsorCurrentName').textContent = sponsorName ? '@' + sponsorName + ' (#' + sponsorId + ')' : 'None (System Root)';
+
+        const sel = document.getElementById('sponsorSelect');
+        const input = document.getElementById('sponsorInput');
+
+        // Reset and set current sponsor if available
+        input.value = sponsorName ? sponsorName : '';
+        if (sponsorId && sponsorId > 0) {
+            sel.value = sponsorId.toString();
+        } else {
+            sel.value = 'none';
+        }
+
+        // Disable selecting oneself in dropdown
+        for (let i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === userId.toString()) {
+                sel.options[i].disabled = true;
+            } else {
+                sel.options[i].disabled = false;
+            }
+        }
+
+        document.getElementById('sponsorModal').classList.remove('hidden');
+    }
+
+    function closeSponsorModal() {
+        document.getElementById('sponsorModal').classList.add('hidden');
+    }
+
+    function syncSponsorSelection() {
+        const sel = document.getElementById('sponsorSelect');
+        const input = document.getElementById('sponsorInput');
+        const val = sel.value;
+        if (val === 'none') {
+            input.value = 'none';
+        } else if (val !== '') {
+            const opt = sel.options[sel.selectedIndex];
+            input.value = opt.getAttribute('data-username') || val;
+        }
+    }
+
     function openEditModal(user) {
         document.getElementById('editUserId').value = user.id;
         document.getElementById('editUsername').value = user.username;
         document.getElementById('editEmail').value = user.email;
+        document.getElementById('editSponsorInput').value = user.sponsor_name || (user.sponsor_id ? user.sponsor_id : '');
         document.getElementById('editPhone').value = user.phone || '';
         document.getElementById('editGender').value = user.gender || '';
         document.getElementById('editDob').value = user.dob || '';

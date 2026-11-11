@@ -403,4 +403,309 @@ class BfsMatrixEngine {
         }
         return $stats;
     }
+
+    /**
+     * Retroactively recalculate all matrix payout commissions for placed members.
+     * Deletes previous 'matrix_payout' transactions and re-evaluates upline earnings
+     * for all placed matrix nodes in ascending order (chronological by node ID),
+     * applying the 60% effective per-head payout schedule.
+     */
+    public static function recalculateAllMatrixPayouts(PDO $pdo): array {
+        $pdo->beginTransaction();
+        try {
+            // 1. Delete all existing matrix_payout transactions
+            $delStmt = $pdo->prepare("DELETE FROM transactions WHERE type = 'matrix_payout'");
+            $delStmt->execute();
+            $deletedCount = $delStmt->rowCount();
+
+            // 2. Fetch all placed matrix nodes in insertion order
+            $stmt = $pdo->query("SELECT * FROM matrix_nodes ORDER BY id ASC");
+            $nodes = $stmt->fetchAll();
+
+            $payoutCount = 0;
+            $totalDistributed = 0.0;
+
+            foreach ($nodes as $node) {
+                // If the node has a parent, distribute matrix rewards to its uplines
+                if ($node['parent_node_id'] !== null) {
+                    $config = self::getConfig($node['package_type']);
+                    $maxLevels = $config['max_levels'];
+                    $payoutRates = $config['effective_level_payouts'] ?? [];
+
+                    $uplines = [];
+                    $currentParentId = $node['parent_node_id'];
+                    $depthCount = 0;
+
+                    while ($currentParentId !== null && $depthCount < $maxLevels) {
+                        $pStmt = $pdo->prepare("
+                            SELECT id, user_id, parent_node_id, level, status
+                            FROM matrix_nodes
+                            WHERE id = :id
+                            LIMIT 1
+                        ");
+                        $pStmt->execute([':id' => $currentParentId]);
+                        $parentNode = $pStmt->fetch();
+
+                        if (!$parentNode) {
+                            break;
+                        }
+
+                        $uplines[] = $parentNode;
+                        $currentParentId = $parentNode['parent_node_id'];
+                        $depthCount++;
+                    }
+
+                    foreach ($uplines as $idx => $upline) {
+                        $relativeDepth = $idx + 1;
+                        $payoutAmount = (float)($payoutRates[$relativeDepth] ?? 0.0);
+
+                        if ($payoutAmount > 0) {
+                            $txStmt = $pdo->prepare("
+                                INSERT INTO transactions
+                                (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+                                VALUES
+                                (:uid, 'matrix_payout', :amt, NULL, 'completed', :details, :created)
+                            ");
+                            $createdAt = !empty($node['created_at']) ? $node['created_at'] : date('Y-m-d H:i:s');
+                            $txStmt->execute([
+                                ':uid'     => (int)$upline['user_id'],
+                                ':amt'     => $payoutAmount,
+                                ':details' => "Matrix Level {$relativeDepth} payout bonus from Node #{$node['id']} in {$node['package_type']}",
+                                ':created' => $createdAt,
+                            ]);
+
+                            $payoutCount++;
+                            $totalDistributed += $payoutAmount;
+                        }
+                    }
+                }
+            }
+
+            $pdo->commit();
+
+            return [
+                'success'           => true,
+                'deleted_previous'  => $deletedCount,
+                'nodes_evaluated'   => count($nodes),
+                'payouts_generated' => $payoutCount,
+                'total_distributed' => round($totalDistributed, 2),
+            ];
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            return [
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Check if assigning $sponsorId to $userId would cause a cycle in the sponsorship hierarchy
+     */
+    public static function wouldCreateSponsorCycle(PDO $pdo, int $userId, int $sponsorId): bool {
+        if ($userId === $sponsorId) {
+            return true;
+        }
+
+        $currentId = $sponsorId;
+        $visited = [$userId];
+
+        while ($currentId !== null && $currentId > 0) {
+            if (in_array($currentId, $visited, true)) {
+                return true;
+            }
+            $visited[] = $currentId;
+
+            $stmt = $pdo->prepare("SELECT sponsor_id FROM users WHERE id = :id LIMIT 1");
+            $stmt->execute([':id' => $currentId]);
+            $currentId = $stmt->fetchColumn();
+            if ($currentId === false || $currentId === null) {
+                break;
+            }
+            $currentId = (int)$currentId;
+        }
+
+        return false;
+    }
+
+    /**
+     * Change or add sponsor for a member.
+     * Clears existing sponsor commission/calculation data originating from this member,
+     * updates sponsor_id, and calculates and credits new commissions for the new sponsor.
+     *
+     * @param PDO $pdo Database connection
+     * @param int $targetUserId The member whose sponsor is changing
+     * @param int|null $newSponsorId The new sponsor ID (or null for none/system root)
+     * @param int|null $adminActorId Admin executing the change for logging
+     * @param float $referralBonusPct Referral commission percent (default 10%)
+     * @return array Result summary
+     */
+    public static function changeMemberSponsor(
+        PDO $pdo,
+        int $targetUserId,
+        ?int $newSponsorId,
+        ?int $adminActorId = null,
+        float $referralBonusPct = 0.10
+    ): array {
+        // Fetch target user
+        $uStmt = $pdo->prepare("SELECT id, username, sponsor_id FROM users WHERE id = :id LIMIT 1");
+        $uStmt->execute([':id' => $targetUserId]);
+        $targetUser = $uStmt->fetch();
+
+        if (!$targetUser) {
+            throw new InvalidArgumentException("User #{$targetUserId} not found.");
+        }
+
+        $oldSponsorId = !empty($targetUser['sponsor_id']) ? (int)$targetUser['sponsor_id'] : null;
+
+        // Normalizing new sponsor ID (null if <= 0)
+        if ($newSponsorId !== null && $newSponsorId <= 0) {
+            $newSponsorId = null;
+        }
+
+        // Check self-sponsorship
+        if ($newSponsorId !== null && $newSponsorId === $targetUserId) {
+            throw new InvalidArgumentException("A user cannot be their own sponsor.");
+        }
+
+        // Validate sponsor exists if provided
+        $newSponsorUsername = null;
+        if ($newSponsorId !== null) {
+            $spStmt = $pdo->prepare("SELECT id, username FROM users WHERE id = :id LIMIT 1");
+            $spStmt->execute([':id' => $newSponsorId]);
+            $newSponsor = $spStmt->fetch();
+            if (!$newSponsor) {
+                throw new InvalidArgumentException("Selected sponsor (ID #{$newSponsorId}) does not exist.");
+            }
+            $newSponsorUsername = $newSponsor['username'];
+
+            // Prevent circular sponsor loops
+            if (self::wouldCreateSponsorCycle($pdo, $targetUserId, $newSponsorId)) {
+                throw new InvalidArgumentException("Cannot assign @{$newSponsorUsername} as sponsor because it creates a circular sponsorship chain.");
+            }
+        }
+
+        // Fetch old sponsor username if existed
+        $oldSponsorUsername = 'None (Root)';
+        if ($oldSponsorId !== null) {
+            $oldSpStmt = $pdo->prepare("SELECT username FROM users WHERE id = :id LIMIT 1");
+            $oldSpStmt->execute([':id' => $oldSponsorId]);
+            $oldSpRow = $oldSpStmt->fetchColumn();
+            if ($oldSpRow) {
+                $oldSponsorUsername = $oldSpRow;
+            }
+        }
+
+        $pdo->beginTransaction();
+        try {
+            // 1. Clear existing commission / referral data originating from this user
+            // Search pattern for transactions generated from this user
+            $userPattern = "%@{$targetUser['username']}%";
+            $delTx = $pdo->prepare("
+                DELETE FROM transactions
+                WHERE type = 'referral_income'
+                  AND (details LIKE :pattern OR details LIKE :pattern_id)
+            ");
+            $delTx->execute([
+                ':pattern'    => $userPattern,
+                ':pattern_id' => "%from user #{$targetUserId}%",
+            ]);
+            $clearedTxCount = $delTx->rowCount();
+
+            // 2. Update user's sponsor_id
+            $upUser = $pdo->prepare("UPDATE users SET sponsor_id = :sp WHERE id = :id");
+            $upUser->execute([
+                ':sp' => $newSponsorId,
+                ':id' => $targetUserId,
+            ]);
+
+            // 3. Generate new commission data if new sponsor is assigned
+            $newCommissionsGenerated = 0;
+            $totalNewCommissionUsdt = 0.00;
+            $newCommissionsDetails = [];
+
+            if ($newSponsorId !== null && $newSponsorId !== $targetUserId) {
+                // Find all active primary matrix nodes belonging to this target user to calculate referral earnings
+                $nodeStmt = $pdo->prepare("
+                    SELECT package_type, is_rebirth
+                    FROM matrix_nodes
+                    WHERE user_id = :uid AND is_rebirth = 0
+                    GROUP BY package_type
+                ");
+                $nodeStmt->execute([':uid' => $targetUserId]);
+                $userPackages = $nodeStmt->fetchAll();
+
+                // If user doesn't have matrix nodes but has completed package upgrades or activations, check those
+                if (empty($userPackages)) {
+                    // Check transactions or approved USDT payments
+                    $pmtStmt = $pdo->prepare("
+                        SELECT k.matrix_type
+                        FROM usdt_payments p
+                        JOIN packages k ON p.package_id = k.id
+                        WHERE p.user_id = :uid AND p.status = 'approved'
+                        GROUP BY k.matrix_type
+                    ");
+                    $pmtStmt->execute([':uid' => $targetUserId]);
+                    $userPackages = $pmtStmt->fetchAll();
+                }
+
+                // If user has packages, generate direct referral commission for each active package
+                $pctDisplay = round($referralBonusPct * 100, 1);
+                foreach ($userPackages as $pkgRow) {
+                    $pkgType = $pkgRow['package_type'] ?? $pkgRow['matrix_type'] ?? 'package_1';
+                    $config = self::getConfig($pkgType);
+                    $packageCost = (float)$config['entry_amount'];
+                    $commissionAmount = round($packageCost * $referralBonusPct, 2);
+
+                    if ($commissionAmount > 0) {
+                        $txRef = $pdo->prepare("
+                            INSERT INTO transactions (user_id, type, amount_usdt, tx_hash, status, details, created_at)
+                            VALUES (:uid, 'referral_income', :amt, NULL, 'completed', :details, NOW())
+                        ");
+                        $details = "Direct Referral Income ({$pctDisplay}%) from member @{$targetUser['username']} ({$pkgType})";
+                        $txRef->execute([
+                            ':uid'     => $newSponsorId,
+                            ':amt'     => $commissionAmount,
+                            ':details' => $details,
+                        ]);
+
+                        $newCommissionsGenerated++;
+                        $totalNewCommissionUsdt += $commissionAmount;
+                        $newCommissionsDetails[] = [
+                            'package' => $pkgType,
+                            'amount'  => $commissionAmount,
+                        ];
+                    }
+                }
+            }
+
+            // 4. Log activities
+            $sponsorLogText = $newSponsorId !== null ? "@{$newSponsorUsername} (#{$newSponsorId})" : "None (Root)";
+            $logMsg = "Admin updated sponsor for @{$targetUser['username']} (ID #{$targetUserId}) from '{$oldSponsorUsername}' to '{$sponsorLogText}'. Cleared {$clearedTxCount} existing commission records; generated {$newCommissionsGenerated} new commission records totaling " . formatUsdt($totalNewCommissionUsdt) . " USDT.";
+
+            if ($adminActorId !== null) {
+                logActivity($adminActorId, $logMsg);
+            }
+            logActivity($targetUserId, "Sponsor updated to '{$sponsorLogText}'. Referral calculations refreshed.");
+
+            $pdo->commit();
+
+            return [
+                'success'                  => true,
+                'target_user_id'           => $targetUserId,
+                'target_username'          => $targetUser['username'],
+                'old_sponsor_id'           => $oldSponsorId,
+                'old_sponsor_username'     => $oldSponsorUsername,
+                'new_sponsor_id'           => $newSponsorId,
+                'new_sponsor_username'     => $newSponsorUsername,
+                'cleared_commissions_count'=> $clearedTxCount,
+                'new_commissions_count'    => $newCommissionsGenerated,
+                'new_commissions_usdt'     => round($totalNewCommissionUsdt, 2),
+                'details'                  => $newCommissionsDetails,
+            ];
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
 }
