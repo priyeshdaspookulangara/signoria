@@ -275,7 +275,7 @@ require_once __DIR__ . '/../includes/header.php';
 
                                                             <!-- Level 4 Expanded Subtree directly beneath this node (Popup style like screenshot) -->
                                                             <?php if ($childCount > 0): ?>
-                                                                <div id="<?= $nodeDomId ?>" class="hidden flex-col items-center absolute top-full left-1/2 -translate-x-1/2 z-30 pt-1 pointer-events-auto min-w-[270px]">
+                                                                <div id="<?= $nodeDomId ?>" class="single-expanded-subtree hidden flex-col items-center absolute top-full left-1/2 -translate-x-1/2 z-30 pt-1 pointer-events-auto min-w-[270px]">
                                                                     <!-- Direct drop down connector line -->
                                                                     <div class="w-0.5 h-6 bg-slate-600"></div>
 
@@ -336,29 +336,30 @@ require_once __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
-function toggleSingleNode(subContainerId, btn) {
-    const container = document.getElementById(subContainerId);
-    if (!container) return;
+function toggleSingleNode(subContainerId, triggerCard) {
+    const targetContainer = document.getElementById(subContainerId);
+    if (!targetContainer) return;
 
-    const icon = btn.querySelector('.toggle-icon');
-    if (container.classList.contains('hidden')) {
-        container.classList.remove('hidden');
-        container.classList.add('flex');
-        if (icon) {
-            icon.classList.remove('fa-plus');
-            icon.classList.add('fa-minus');
+    const isCurrentlyOpen = !targetContainer.classList.contains('hidden');
+
+    // Close all open expanded subtrees first
+    document.querySelectorAll('.single-expanded-subtree').forEach(function(el) {
+        el.classList.add('hidden');
+        el.classList.remove('flex');
+    });
+
+    // Reset all trigger card active styling
+    document.querySelectorAll('.l3-trigger-active').forEach(function(card) {
+        card.classList.remove('l3-trigger-active', 'ring-2', 'ring-emerald-500', 'bg-slate-750');
+    });
+
+    // If it wasn't open previously, open it now (accordion behavior)
+    if (!isCurrentlyOpen) {
+        targetContainer.classList.remove('hidden');
+        targetContainer.classList.add('flex');
+        if (triggerCard) {
+            triggerCard.classList.add('l3-trigger-active', 'ring-2', 'ring-emerald-500', 'bg-slate-750');
         }
-        btn.classList.add('bg-emerald-600', 'text-white');
-        btn.classList.remove('bg-slate-800', 'text-emerald-400');
-    } else {
-        container.classList.add('hidden');
-        container.classList.remove('flex');
-        if (icon) {
-            icon.classList.remove('fa-minus');
-            icon.classList.add('fa-plus');
-        }
-        btn.classList.remove('bg-emerald-600', 'text-white');
-        btn.classList.add('bg-slate-800', 'text-emerald-400');
     }
 }
 </script>
