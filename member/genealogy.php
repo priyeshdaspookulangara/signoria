@@ -40,11 +40,11 @@ $targetNodeId = isset($_GET['node_id']) ? (int)$_GET['node_id'] : 0;
 
 $tree = null;
 if ($targetNodeId > 0) {
-    // Load requested node's 3-level tree
-    $tree = BfsMatrixEngine::getNodeMatrixTree($pdo, $targetNodeId, 3);
+    // Load requested node's tree up to 4 levels so Level 3 nodes can expand inline
+    $tree = BfsMatrixEngine::getNodeMatrixTree($pdo, $targetNodeId, 4);
 } elseif ($userRootNode) {
-    // Default to current user's root node tree
-    $tree = BfsMatrixEngine::getNodeMatrixTree($pdo, (int)$userRootNode['id'], 3);
+    // Default to current user's root node tree up to 4 levels
+    $tree = BfsMatrixEngine::getNodeMatrixTree($pdo, (int)$userRootNode['id'], 4);
 }
 
 // Build parent breadcrumb if viewing a descendant node
@@ -251,17 +251,60 @@ require_once __DIR__ . '/../includes/header.php';
                                                 <div class="flex flex-col items-center">
                                                     <div class="w-0.5 h-2 bg-slate-700 -mt-1.5"></div>
                                                     <?php if ($grandChild): ?>
-                                                        <!-- Clickable Level 3 Node -->
-                                                        <a href="/member/genealogy.php?package=<?= e($packageType) ?>&node_id=<?= (int)$grandChild['id'] ?>"
-                                                           title="Click to view <?= e($grandChild['username']) ?>'s genealogy"
-                                                           class="w-full p-2 rounded-lg bg-slate-900 hover:bg-slate-800 border <?= $grandChild['is_rebirth'] ? 'border-purple-500/50' : 'border-slate-800 hover:border-teal-500' ?> text-center shadow transition transform hover:-translate-y-0.5 block group">
-                                                            <div class="text-[9px] text-slate-200 group-hover:text-teal-300 font-bold truncate">
-                                                                <?= e($grandChild['username']) ?>
+                                                        <?php
+                                                        $hasSubChildren = !empty($grandChild['children']);
+                                                        $nodeDomId = 'node_sub_' . (int)$grandChild['id'];
+                                                        ?>
+                                                        <!-- Level 3 Node Container with Single-Node Expansion -->
+                                                        <div class="w-full flex flex-col items-center">
+                                                            <div class="w-full p-2 rounded-lg bg-slate-900 hover:bg-slate-850 border <?= $grandChild['is_rebirth'] ? 'border-purple-500/50' : 'border-slate-800 hover:border-teal-500' ?> text-center shadow transition relative group">
+                                                                <!-- Node Header Link (Navigate into full tree) -->
+                                                                <a href="/member/genealogy.php?package=<?= e($packageType) ?>&node_id=<?= (int)$grandChild['id'] ?>"
+                                                                   title="Click to focus on <?= e($grandChild['username']) ?>'s genealogy"
+                                                                   class="block">
+                                                                    <div class="text-[9px] text-slate-200 group-hover:text-teal-300 font-bold truncate">
+                                                                        <?= e($grandChild['username']) ?>
+                                                                    </div>
+                                                                    <div class="text-[8px] text-emerald-400 font-mono mt-0.5">
+                                                                        #<?= (int)$grandChild['position_index'] ?>
+                                                                    </div>
+                                                                </a>
+
+                                                                <!-- Inline Expand / Collapse Button if this node has children -->
+                                                                <?php if ($hasSubChildren): ?>
+                                                                    <button type="button"
+                                                                            onclick="toggleSingleNode('<?= $nodeDomId ?>', this); event.stopPropagation();"
+                                                                            title="Expand/Collapse this node's direct children"
+                                                                            class="mt-1 px-1.5 py-0.5 rounded bg-slate-800 hover:bg-emerald-600 text-[8px] text-emerald-400 hover:text-white font-mono font-bold transition flex items-center justify-center mx-auto gap-0.5 border border-slate-700">
+                                                                        <i class="fa-solid fa-plus text-[7px] toggle-icon"></i>
+                                                                        <span><?= count($grandChild['children']) ?></span>
+                                                                    </button>
+                                                                <?php endif; ?>
                                                             </div>
-                                                            <div class="text-[8px] text-emerald-400 font-mono mt-0.5">
-                                                                #<?= (int)$grandChild['position_index'] ?>
-                                                            </div>
-                                                        </a>
+
+                                                            <!-- Expandable Subtree (CSS / Div hidden by default) -->
+                                                            <?php if ($hasSubChildren): ?>
+                                                                <div id="<?= $nodeDomId ?>" class="hidden w-full flex-col items-center mt-1 animate-fadeIn">
+                                                                    <!-- Connecting Stem -->
+                                                                    <div class="w-0.5 h-3 bg-teal-500/60"></div>
+                                                                    <!-- Sub-Children Container -->
+                                                                    <div class="grid grid-cols-3 gap-1 w-full pt-1 border-t border-teal-500/60">
+                                                                        <?php foreach ($grandChild['children'] as $greatGrandChild): ?>
+                                                                            <a href="/member/genealogy.php?package=<?= e($packageType) ?>&node_id=<?= (int)$greatGrandChild['id'] ?>"
+                                                                               title="View <?= e($greatGrandChild['username']) ?>"
+                                                                               class="p-1 rounded bg-slate-950 border border-teal-500/40 hover:border-teal-400 text-center block shadow transition transform hover:scale-105">
+                                                                                <div class="text-[8px] text-teal-300 font-bold truncate">
+                                                                                    <?= e($greatGrandChild['username']) ?>
+                                                                                </div>
+                                                                                <div class="text-[7px] text-slate-400 font-mono">
+                                                                                    #<?= (int)$greatGrandChild['position_index'] ?>
+                                                                                </div>
+                                                                            </a>
+                                                                        <?php endforeach; ?>
+                                                                    </div>
+                                                                </div>
+                                                            <?php endif; ?>
+                                                        </div>
                                                     <?php else: ?>
                                                         <div class="w-full p-2 rounded-lg bg-slate-950/40 border border-dashed border-slate-800 text-center text-slate-600">
                                                             <div class="text-[8px] font-mono">Empty</div>
@@ -289,5 +332,33 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+function toggleSingleNode(subContainerId, btn) {
+    const container = document.getElementById(subContainerId);
+    if (!container) return;
+
+    const icon = btn.querySelector('.toggle-icon');
+    if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        container.classList.add('flex');
+        if (icon) {
+            icon.classList.remove('fa-plus');
+            icon.classList.add('fa-minus');
+        }
+        btn.classList.add('bg-emerald-600', 'text-white');
+        btn.classList.remove('bg-slate-800', 'text-emerald-400');
+    } else {
+        container.classList.add('hidden');
+        container.classList.remove('flex');
+        if (icon) {
+            icon.classList.remove('fa-minus');
+            icon.classList.add('fa-plus');
+        }
+        btn.classList.remove('bg-emerald-600', 'text-white');
+        btn.classList.add('bg-slate-800', 'text-emerald-400');
+    }
+}
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
