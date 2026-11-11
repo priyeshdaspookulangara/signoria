@@ -198,7 +198,7 @@ tailwind.config={theme:{extend:{
   <div class="rv text-center">
    <p class="text-xs tracking-[.3em] uppercase text-gold">Starter &middot; 50 USDT</p>
    <h2 class="mt-3 font-display font-semibold text-4xl sm:text-6xl text-paper">Exclusive Tier <span class="goldtext">Architecture</span></h2>
-   <p class="mt-4 text-paper/60">6-level 3-matrix downline earnings table &ndash; calculated projections</p>
+   <p class="mt-4 text-paper/60">6-level 3-matrix downline earnings table &ndash; Effective Total (60% Net) Customer Earnings</p>
   </div>
   <div class="rv mt-12 card rounded-3xl overflow-hidden glow">
    <div class="overflow-x-auto">
@@ -207,26 +207,27 @@ tailwind.config={theme:{extend:{
       <tr>
        <th scope="col" class="py-4 px-4 font-semibold text-left">Downline Level</th>
        <th scope="col" class="py-4 px-4 font-semibold">Members on Level (3<sup>L</sup>)</th>
-       <th scope="col" class="py-4 px-4 font-semibold">Commission per Head (USDT)</th>
-       <th scope="col" class="py-4 px-4 font-semibold">Potential Total<span class="block text-xs font-normal text-paper/50">Members &times; Commission</span></th>
-       <th scope="col" class="py-4 px-4 font-semibold text-lgold">Effective Total<span class="block text-xs font-normal text-paper/50">60% of Potential</span></th>
+       <th scope="col" class="py-4 px-4 font-semibold">Base Rate (USDT)</th>
+       <th scope="col" class="py-4 px-4 font-semibold text-emerald-400">Effective Payout per Head<span class="block text-xs font-normal text-paper/50">60% Net Payout</span></th>
+       <th scope="col" class="py-4 px-4 font-semibold">Potential Total<span class="block text-xs font-normal text-paper/50">Members &times; Base Rate</span></th>
+       <th scope="col" class="py-4 px-4 font-semibold text-lgold">Effective Total<span class="block text-xs font-normal text-paper/50">Customer Net Earnings</span></th>
       </tr>
      </thead>
      <tbody class="divide-y divide-gold/10 text-paper/80">
-      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 1</th><td>3</td><td>1.50</td><td>4.50</td><td class="text-lgold font-semibold">2.70</td></tr>
-      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 2</th><td>9</td><td>2.00</td><td>18.00</td><td class="text-lgold font-semibold">10.80</td></tr>
-      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 3</th><td>27</td><td>4.00</td><td>108.00</td><td class="text-lgold font-semibold">64.80</td></tr>
-      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 4</th><td>81</td><td>6.00</td><td>486.00</td><td class="text-lgold font-semibold">291.60</td></tr>
-      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 5</th><td>243</td><td>8.00</td><td>1,944.00</td><td class="text-lgold font-semibold">1,166.40</td></tr>
-      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 6</th><td>729</td><td>10.00</td><td>7,290.00</td><td class="text-lgold font-semibold">4,374.00</td></tr>
+      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 1</th><td>3</td><td>1.50</td><td class="text-emerald-400 font-semibold">0.90</td><td>4.50</td><td class="text-lgold font-bold">2.70</td></tr>
+      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 2</th><td>9</td><td>2.00</td><td class="text-emerald-400 font-semibold">1.20</td><td>18.00</td><td class="text-lgold font-bold">10.80</td></tr>
+      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 3</th><td>27</td><td>4.00</td><td class="text-emerald-400 font-semibold">2.40</td><td>108.00</td><td class="text-lgold font-bold">64.80</td></tr>
+      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 4</th><td>81</td><td>6.00</td><td class="text-emerald-400 font-semibold">3.60</td><td>486.00</td><td class="text-lgold font-bold">291.60</td></tr>
+      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 5</th><td>243</td><td>8.00</td><td class="text-emerald-400 font-semibold">4.80</td><td>1,944.00</td><td class="text-lgold font-bold">1,166.40</td></tr>
+      <tr><th scope="row" class="py-3.5 px-4 text-left font-medium">Level 6</th><td>729</td><td>10.00</td><td class="text-emerald-400 font-semibold">6.00</td><td>7,290.00</td><td class="text-lgold font-bold">4,374.00</td></tr>
      </tbody>
      <tfoot class="goldbtn font-bold">
-      <tr><th scope="row" class="py-4 px-4 text-left">TOTALS</th><td>1,092</td><td>31.50</td><td>9,850.50 USDT</td><td>5,910.30 USDT</td></tr>
+      <tr><th scope="row" class="py-4 px-4 text-left">TOTALS</th><td>1,092</td><td>31.50</td><td class="text-emerald-950">18.90</td><td>9,850.50 USDT</td><td>5,910.30 USDT</td></tr>
      </tfoot>
     </table>
    </div>
   </div>
-  <p class="rv mt-5 text-center text-xs text-paper/45 max-w-2xl mx-auto">Projections assume every position on every level is filled. Actual results depend on community growth and are not guaranteed.</p>
+  <p class="rv mt-5 text-center text-xs text-paper/45 max-w-2xl mx-auto">Projections assume every position on every level is filled; "Effective Total" is the actual 60% net credited directly to your member wallet.</p>
   <div class="rv mt-8 text-center"><a href="/auth/register.php?pkg=package_1" class="goldbtn inline-block px-8 py-4 rounded-full font-bold hover:brightness-110 transition">Start with the 50 USDT Starter</a></div>
  </div>
 </section>

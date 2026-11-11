@@ -123,22 +123,22 @@
     const f = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     function build(id, cfg) {
-      let rows = '', m = 0, c = 0, p = 0, e = 0, missing = false;
+      let rows = '', m = 0, c = 0, ce = 0, p = 0, e = 0, missing = false;
       cfg.rates.forEach((r, i) => {
         const n = Math.pow(3, i + 1);
         m += n;
         if (r == null) {
           missing = true;
-          rows += `<tr><th scope="row" class="text-left font-medium">Level ${i + 1}</th><td>${n.toLocaleString('en-US')}</td><td>&ndash;</td><td>&ndash;</td><td class="text-lgold">&ndash;</td></tr>`;
+          rows += `<tr><th scope="row" class="text-left font-medium">Level ${i + 1}</th><td>${n.toLocaleString('en-US')}</td><td>&ndash;</td><td class="text-emerald-400 font-semibold">&ndash;</td><td>&ndash;</td><td class="text-lgold font-bold">&ndash;</td></tr>`;
           return;
         }
-        const pot = n * r, eff = pot * .6;
-        c += r; p += pot; e += eff;
-        rows += `<tr><th scope="row" class="text-left font-medium">Level ${i + 1}</th><td>${n.toLocaleString('en-US')}</td><td>${f(r)}</td><td>${f(pot)}</td><td class="text-lgold font-semibold">${f(eff)}</td></tr>`;
+        const pot = n * r, eff = pot * .6, effPerHead = r * .6;
+        c += r; ce += effPerHead; p += pot; e += eff;
+        rows += `<tr><th scope="row" class="text-left font-medium">Level ${i + 1}</th><td>${n.toLocaleString('en-US')}</td><td>${f(r)}</td><td class="text-emerald-400 font-semibold">${f(effPerHead)}</td><td>${f(pot)}</td><td class="text-lgold font-bold">${f(eff)}</td></tr>`;
       });
 
       const tot = missing ? ['&ndash;', '&ndash;'] : [f(p) + ' USDT', f(e) + ' USDT'];
-      document.getElementById(id).innerHTML = `<div class="overflow-x-auto"><table class="w-full min-w-[640px] text-sm text-center"> <thead class="bg-gold/10 text-paper"><tr><th scope="col" class="text-left">Downline Level</th><th scope="col">Members on Level (3<sup>L</sup>)</th><th scope="col">Commission per Head (USDT)</th><th scope="col">Potential Total<span class="block text-xs font-normal text-paper/50">Members &times; Commission</span></th><th scope="col" class="text-lgold">Effective Total<span class="block text-xs font-normal text-paper/50">60% of Potential</span></th></tr></thead> <tbody class="divide-y divide-gold/10 text-paper/80">${rows}</tbody> <tfoot class="goldbtn font-bold"><tr><th scope="row" class="text-left">TOTALS</th><td>${m.toLocaleString('en-US')}</td><td>${missing ? '&ndash;' : f(c)}</td><td>${tot[0]}</td><td>${tot[1]}</td></tr></tfoot></table></div>`;
+      document.getElementById(id).innerHTML = `<div class="overflow-x-auto"><table class="w-full min-w-[640px] text-sm text-center"> <thead class="bg-gold/10 text-paper"><tr><th scope="col" class="text-left">Downline Level</th><th scope="col">Members on Level (3<sup>L</sup>)</th><th scope="col">Base Rate per Head (USDT)</th><th scope="col" class="text-emerald-400">Effective Payout per Head<span class="block text-xs font-normal text-paper/50">60% Net Payout</span></th><th scope="col">Potential Total<span class="block text-xs font-normal text-paper/50">Members &times; Base Rate</span></th><th scope="col" class="text-lgold">Effective Total<span class="block text-xs font-normal text-paper/50">Customer Net Earnings</span></th></tr></thead> <tbody class="divide-y divide-gold/10 text-paper/80">${rows}</tbody> <tfoot class="goldbtn font-bold"><tr><th scope="row" class="text-left">TOTALS</th><td>${m.toLocaleString('en-US')}</td><td>${missing ? '&ndash;' : f(c)}</td><td class="text-emerald-950">${missing ? '&ndash;' : f(ce)}</td><td>${tot[0]}</td><td>${tot[1]}</td></tr></tfoot></table></div>`;
     }
 
     build('t1', TIERS.t1);
