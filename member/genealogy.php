@@ -253,6 +253,11 @@ require_once __DIR__ . '/../includes/header.php';
                                                         <?php
                                                         $childCount = !empty($grandChild['children']) ? count($grandChild['children']) : 0;
                                                         $nodeDomId = 'node_sub_' . (int)$grandChild['id'];
+                                                        // Determine alignment & bending based on column index
+                                                        // $i: 0 = Left L2 subtree, 1 = Center L2 subtree, 2 = Right L2 subtree
+                                                        // $j: 0 = Left L3 child, 1 = Center L3 child, 2 = Right L3 child
+                                                        // Global column index: $globalCol = ($i * 3) + $j (0 to 8)
+                                                        $globalCol = ($i * 3) + $j;
                                                         ?>
                                                         <!-- Level 3 Card with Single-Node Expansion -->
                                                         <div class="w-full flex flex-col items-center relative">
@@ -275,13 +280,42 @@ require_once __DIR__ . '/../includes/header.php';
 
                                                             <!-- Level 4 Expanded Subtree directly beneath this node (Popup style like screenshot) -->
                                                             <?php if ($childCount > 0): ?>
-                                                                <div id="<?= $nodeDomId ?>" class="single-expanded-subtree hidden flex-col items-center absolute top-full left-1/2 -translate-x-1/2 z-30 pt-1 pointer-events-auto min-w-[270px]">
-                                                                    <!-- Direct drop down connector line -->
-                                                                    <div class="w-0.5 h-6 bg-slate-600"></div>
+                                                                <?php if ($globalCol <= 1): ?>
+                                                                    <!-- Left-most nodes: bend connector and shift dropdown to the right (as depicted in screenshot) -->
+                                                                    <div id="<?= $nodeDomId ?>" class="single-expanded-subtree hidden flex-col absolute top-full left-1/2 z-30 pt-1 pointer-events-auto min-w-[280px]">
+                                                                        <!-- Connector stem: vertical down from card center, horizontal right, then down to container -->
+                                                                        <div class="flex flex-col items-start w-full">
+                                                                            <div class="w-0.5 h-3 bg-slate-600"></div>
+                                                                            <div class="w-24 h-0.5 bg-slate-600"></div>
+                                                                            <div class="w-0.5 h-3 bg-slate-600 ml-24"></div>
+                                                                        </div>
 
-                                                                    <!-- Horizontal bracket connector -->
-                                                                    <div class="w-full pt-1.5 border-t-2 border-slate-600">
-                                                                        <div class="grid grid-cols-3 gap-2 w-full bg-slate-900/95 p-2 rounded-2xl border border-slate-700 shadow-2xl backdrop-blur-md">
+                                                                        <!-- Horizontal bracket connector -->
+                                                                        <div class="w-full pt-1.5 border-t-2 border-slate-600 ml-2">
+                                                                            <div class="grid grid-cols-3 gap-2 w-full bg-slate-900/95 p-2 rounded-2xl border border-slate-700 shadow-2xl backdrop-blur-md">
+                                                                <?php elseif ($globalCol >= 7): ?>
+                                                                    <!-- Right-most nodes: bend connector and shift dropdown to the left to prevent right edge overflow -->
+                                                                    <div id="<?= $nodeDomId ?>" class="single-expanded-subtree hidden flex-col items-end absolute top-full right-1/2 z-30 pt-1 pointer-events-auto min-w-[280px]">
+                                                                        <!-- Connector stem: vertical down from card center, horizontal left, then down to container -->
+                                                                        <div class="flex flex-col items-end w-full">
+                                                                            <div class="w-0.5 h-3 bg-slate-600"></div>
+                                                                            <div class="w-24 h-0.5 bg-slate-600"></div>
+                                                                            <div class="w-0.5 h-3 bg-slate-600 mr-24"></div>
+                                                                        </div>
+
+                                                                        <!-- Horizontal bracket connector -->
+                                                                        <div class="w-full pt-1.5 border-t-2 border-slate-600 mr-2">
+                                                                            <div class="grid grid-cols-3 gap-2 w-full bg-slate-900/95 p-2 rounded-2xl border border-slate-700 shadow-2xl backdrop-blur-md">
+                                                                <?php else: ?>
+                                                                    <!-- Middle nodes: centered directly below node -->
+                                                                    <div id="<?= $nodeDomId ?>" class="single-expanded-subtree hidden flex-col items-center absolute top-full left-1/2 -translate-x-1/2 z-30 pt-1 pointer-events-auto min-w-[280px]">
+                                                                        <!-- Direct drop down connector line -->
+                                                                        <div class="w-0.5 h-6 bg-slate-600"></div>
+
+                                                                        <!-- Horizontal bracket connector -->
+                                                                        <div class="w-full pt-1.5 border-t-2 border-slate-600">
+                                                                            <div class="grid grid-cols-3 gap-2 w-full bg-slate-900/95 p-2 rounded-2xl border border-slate-700 shadow-2xl backdrop-blur-md">
+                                                                <?php endif; ?>
                                                                             <?php foreach ($grandChild['children'] as $greatGrandChild): ?>
                                                                                 <div class="flex flex-col items-center">
                                                                                     <div class="w-0.5 h-2 bg-slate-600 -mt-2"></div>
