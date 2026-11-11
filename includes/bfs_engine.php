@@ -307,7 +307,7 @@ class BfsMatrixEngine {
      * Retrieve visual tree structure for a user in a given package.
      * Returns the user's primary/active node and their direct downstream children (up to 3 levels deep).
      */
-    public static function getUserMatrixTree(PDO $pdo, int $userId, string $packageType): ?array {
+    public static function getUserMatrixTree(PDO $pdo, int $userId, string $packageType, int $maxDepth = 3): ?array {
         // Find user's earliest active node in this package
         $stmt = $pdo->prepare("
             SELECT m.*, u.username, u.email, u.usdt_wallet
@@ -327,10 +327,34 @@ class BfsMatrixEngine {
             return null;
         }
 
-        // Fetch direct 1st level children
-        $rootNode['children'] = self::getNodeChildren($pdo, (int)$rootNode['id'], 1, 2);
+        // Fetch direct children up to maxDepth levels deep
+        $rootNode['children'] = self::getNodeChildren($pdo, (int)$rootNode['id'], 1, $maxDepth);
 
         // Calculate total team size under this node
+        $rootNode['team_count'] = self::countDescendants($pdo, (int)$rootNode['id']);
+
+        return $rootNode;
+    }
+
+    /**
+     * Retrieve tree structure anchored at a specific matrix node ID (up to 3 levels deep).
+     */
+    public static function getNodeMatrixTree(PDO $pdo, int $nodeId, int $maxDepth = 3): ?array {
+        $stmt = $pdo->prepare("
+            SELECT m.*, u.username, u.email, u.usdt_wallet
+            FROM matrix_nodes m
+            JOIN users u ON m.user_id = u.id
+            WHERE m.id = :nid
+            LIMIT 1
+        ");
+        $stmt->execute([':nid' => $nodeId]);
+        $rootNode = $stmt->fetch();
+
+        if (!$rootNode) {
+            return null;
+        }
+
+        $rootNode['children'] = self::getNodeChildren($pdo, (int)$rootNode['id'], 1, $maxDepth);
         $rootNode['team_count'] = self::countDescendants($pdo, (int)$rootNode['id']);
 
         return $rootNode;
